@@ -1,0 +1,124 @@
+openapi: 3.1.0
+info:
+  title: Football Edge Agent Phase 3 API Patch
+  version: 0.3.0-phase3
+  description: Baseline model and probability-engine endpoints for future GPT Actions integration.
+paths:
+  /model/status:
+    get:
+      operationId: getModelStatus
+      summary: Get Phase 3 model status and governance posture.
+      responses:
+        "200":
+          description: Model status response.
+  /probabilities/calculate:
+    post:
+      operationId: calculateProbabilities
+      summary: Calculate baseline model probabilities.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - market
+                - odds_by_selection
+                - home_expected_goals
+                - away_expected_goals
+              properties:
+                market:
+                  type: string
+                  enum: [1X2, OVER_UNDER_2_5, BTTS]
+                odds_by_selection:
+                  type: object
+                  additionalProperties:
+                    type: number
+                home_expected_goals:
+                  type: number
+                  minimum: 0
+                away_expected_goals:
+                  type: number
+                  minimum: 0
+                home_elo_rating:
+                  type: number
+                  default: 1500
+                away_elo_rating:
+                  type: number
+                  default: 1500
+                xg_available:
+                  type: boolean
+                  default: true
+                historical_odds_available:
+                  type: boolean
+                  default: true
+      responses:
+        "200":
+          description: Probability outputs by selection.
+        "422":
+          description: Mandatory data or validation failure.
+  /recommendations/fixture/direct:
+    post:
+      operationId: createDirectRecommendation
+      summary: Create a governed direct recommendation payload.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - fixture_id
+                - market
+                - selection
+                - decimal_odds
+                - model_probability
+                - bookie_probability
+                - data_quality_score
+              properties:
+                fixture_id:
+                  type: integer
+                  minimum: 1
+                market:
+                  type: string
+                selection:
+                  type: string
+                decimal_odds:
+                  type: number
+                  exclusiveMinimum: 1
+                model_probability:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+                bookie_probability:
+                  type: number
+                  minimum: 0
+                  maximum: 1
+                data_quality_score:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+                xg_available:
+                  type: boolean
+                  default: true
+                historical_odds_available:
+                  type: boolean
+                  default: true
+                odds_fresh:
+                  type: boolean
+                  default: true
+                auto_betting_enabled:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Recommendation output.
+        "422":
+          description: Mandatory data, governance, or validation failure.
+  /backtests/summary:
+    post:
+      operationId: summarizeBacktest
+      summary: Summarize calibration rows with Brier score and log loss.
+      responses:
+        "200":
+          description: Backtest summary response.
