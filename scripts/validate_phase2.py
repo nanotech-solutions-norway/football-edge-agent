@@ -10,6 +10,7 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+VALIDATOR_PATH = Path("scripts/validate_phase2.py")
 
 REQUIRED_FILES = [
     "README.md",
@@ -48,10 +49,19 @@ REQUIRED_TERMS = [
 PROHIBITED_TERMS = ["Tippeligaen"]
 
 
+def should_scan(path: Path) -> bool:
+    relative_path = path.relative_to(ROOT)
+    if relative_path == VALIDATOR_PATH:
+        return False
+    if ".git" in path.parts or "__pycache__" in path.parts:
+        return False
+    return path.is_file()
+
+
 def read_all_text() -> str:
     parts: list[str] = []
     for path in ROOT.rglob("*"):
-        if path.is_file() and ".git" not in path.parts and "__pycache__" not in path.parts:
+        if should_scan(path):
             try:
                 parts.append(path.read_text(encoding="utf-8"))
             except UnicodeDecodeError:
