@@ -1,0 +1,9 @@
+[project]
+name = "football-edge-agent"
+version = "0.2.0"
+description = "Phase 2 FastAPI/PostgreSQL backend foundation for Football Edge Intelligence Agent"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["backend/tests"]
