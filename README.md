@@ -1,6 +1,6 @@
-# Football Edge Agent — Phase 2 Backend Foundation — 08:33, 27.04.2026 Europe/Oslo
+# Football Edge Agent — Phase 3 Baseline Model and Probability Engine — 20:16, 27.04.2026 Europe/Oslo
 
-This repository contains the Phase 2 backend/data foundation for the Football Edge Intelligence Agent.
+This repository contains the Football Edge Intelligence Agent backend through Phase 3.
 
 ## Governance posture
 
@@ -8,6 +8,7 @@ This repository contains the Phase 2 backend/data foundation for the Football Ed
 - Default recommendation posture: **NO BET**.
 - No guaranteed picks, loss chasing, reckless staking, unsupported markets, or unsupported competitions.
 - Auto-betting is represented only as an inactive, hard-locked architecture placeholder.
+- Historical odds and xG are mandatory.
 - Eliteserien is the only approved Norwegian elite-league name.
 
 ## MVP competitions
@@ -24,21 +25,21 @@ This repository contains the Phase 2 backend/data foundation for the Football Ed
 ## MVP markets
 
 - 1X2
-- Over/Under 2.5 Goals
-- Both Teams To Score
+- Over/Under 2.5 Goals (`OVER_UNDER_2_5`)
+- Both Teams To Score (`BTTS`)
 
-## Mandatory data domains
+## Phase 3 model-engine features
 
-- Fixtures and results
-- Current odds
-- Historical odds
-- xG
-- Lineups
-- Injuries/suspensions
-- Provider timestamps
-- Provider audit trail
-- Data-quality scoring
-- Audit logging
+- Market-implied probability conversion from decimal odds.
+- No-vig probability and bookmaker margin calculation.
+- Elo foundation and Glicko scaffold.
+- xG rolling-strength inputs and Poisson expected-goals modelling.
+- Poisson market probability derivation for 1X2, O/U 2.5, and BTTS.
+- Ensemble blending of Poisson/xG, no-vig market baseline, and Elo signals.
+- Brier score, log loss, and calibration summary helpers.
+- Expected value, fair odds, edge, and minimum acceptable odds.
+- Recommendation logic restricted to `BET`, `WATCHLIST`, or `NO BET`.
+- Model probability vs bookmaker probability comparison chart output.
 
 ## Local startup
 
@@ -69,14 +70,26 @@ GET  /data-quality/{fixture_id}
 GET  /audit/fixture/{fixture_id}
 GET  /auto-betting/status
 POST /auto-betting/execute
+
+GET  /model/status
+POST /probabilities/calculate
+POST /recommendations/fixture/direct
+POST /backtests/summary
+```
+
+## Validation
+
+```bash
+python scripts/validate_phase2.py
+python scripts/validate_phase3.py
+python -m pytest -vv
 ```
 
 ## Documentation
 
-- `docs/implementation_instructions.md`
-- `docs/domain_and_hosting_domeneshop.md`
+- `docs/phase2_status_report.md`
+- `docs/phase3_model_probability_engine.md`
 - `docs/provider_setup.md`
 - `docs/api_contract.md`
 - `docs/database_schema.md`
 - `docs/validation_checklist.md`
-- `docs/phase2_completion_report_template.md`
