@@ -1,7 +1,7 @@
 [project]
 name = "football-edge-agent"
-version = "0.2.0"
-description = "Phase 2 FastAPI/PostgreSQL backend foundation for Football Edge Intelligence Agent"
+version = "0.3.0"
+description = "Football Edge Agent backend through Phase 3 baseline probability engine"
 requires-python = ">=3.11"
 
 [tool.pytest.ini_options]
