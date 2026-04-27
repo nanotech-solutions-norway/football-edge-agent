@@ -1,0 +1,36 @@
+name: Phase 3 Model Engine Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, phase3-probability-engine]
+  pull_request:
+    branches: [main]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  validate-phase3:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Static Phase 2 validation
+        run: |
+          python scripts/validate_phase2.py
+      - name: Static Phase 3 validation
+        run: |
+          python scripts/validate_phase3.py
+      - name: Run test suite
+        run: |
+          python -m pytest -vv
