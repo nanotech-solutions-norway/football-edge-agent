@@ -3,6 +3,12 @@
 .env.*
 !.env.example
 
+# Server-local path overrides / access-control secrets
+api_config.php
+.htpasswd
+.htpasswd*
+*.htpasswd
+
 # Temporary database diagnostics / health checks
 football_edge_db_healthcheck.php
 *_healthcheck.php
