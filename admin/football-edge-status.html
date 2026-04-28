@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Football Edge / Atlas — Backend Status</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
+  <meta name="referrer" content="no-referrer">
+  <link rel="stylesheet" href="./assets/css/football-edge-status.css">
+</head>
+<body>
+  <main class="fe-dashboard">
+    <section class="fe-header">
+      <div>
+        <h1>Football Edge / Atlas — Backend Status</h1>
+        <p>Read-only operational view for backend/API connectivity, active model status, competition seed data, and safety-state verification.</p>
+      </div>
+      <button id="fe-refresh-button" class="fe-button" type="button">Refresh</button>
+    </section>
+    <section class="fe-grid">
+      <article class="fe-card"><h2>API Health</h2><div class="fe-kpi"><span>API status</span><span id="fe-api-status" class="fe-badge fe-badge-warning">Loading</span></div><div class="fe-kpi"><span>Last updated</span><span id="fe-last-updated">—</span></div><p id="fe-error-message" class="fe-error"></p></article>
+      <article class="fe-card"><h2>Safety State</h2><div class="fe-kpi"><span>Safety lock</span><span id="fe-safety-status" class="fe-badge fe-badge-warning">Loading</span></div><div class="fe-kpi"><span>Real-money execution status</span><span id="fe-real-betting-status">—</span></div><div class="fe-kpi"><span>Automation enabled</span><span id="fe-auto-betting-enabled">—</span></div><div class="fe-kpi"><span>Dry run</span><span id="fe-dry-run">—</span></div><div class="fe-kpi"><span>Provider</span><span id="fe-provider-name">—</span></div><div class="fe-kpi"><span>Review flags</span><span id="fe-review-flags">—</span></div></article>
+      <article class="fe-card"><h2>Active Model</h2><div class="fe-kpi"><span>Version</span><span id="fe-model-version">—</span></div><div class="fe-kpi"><span>Name</span><span id="fe-model-name">—</span></div><div class="fe-kpi"><span>Type</span><span id="fe-model-type">—</span></div></article>
+      <article class="fe-card"><h2>Competitions</h2><div class="fe-kpi"><span>Active competition count</span><span id="fe-competition-count">—</span></div><div id="fe-competitions-list" class="fe-competition-list"></div></article>
+    </section>
+  </main>
+  <script>window.FOOTBALL_EDGE_API_BASE_URL = "/api";</script>
+  <script src="./assets/js/football-edge-api-client.js"></script>
+  <script src="./assets/js/football-edge-status-widget.js"></script>
+</body>
+</html>
