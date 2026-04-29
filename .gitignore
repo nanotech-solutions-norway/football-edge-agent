@@ -26,6 +26,15 @@ football_edge_db_healthcheck.php
 *_seed.sql
 *_migration.sql
 
+# Generated operational exports and local validation outputs
+reports/generated/
+reports/archive/
+exports/
+*_weekly_validation_export.csv
+*_weekly_validation_report.json
+*_paper_trading_report.csv
+*_paper_trading_report.json
+
 # Python caches and virtual environments
 __pycache__/
 *.py[cod]
