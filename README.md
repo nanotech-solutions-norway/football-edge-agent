@@ -10,6 +10,18 @@ This repository contains the Phase 2 backend/data foundation for the Football Ed
 - Auto-betting is represented only as an inactive, hard-locked architecture placeholder.
 - Eliteserien is the only approved Norwegian elite-league name.
 
+## Process progress reporting
+
+Effective 21:29, 08.08.2026 Europe/Oslo, all Football Edge Agent work must follow `docs/PROCESS_PROGRESS_REPORTING_STANDARD.md` and the root `AGENTS.md`.
+
+After every discrete process or major work step, the operator-facing response must include a cumulative evidence-weighted status bar:
+
+```text
+Process status: [██████░░░░] 60% — <brief status>
+```
+
+The percentage is calculated against the approved completion target and verified evidence gates. Failed, blocked, or unverified work does not increase progress. The indicator never authorizes betting, auto-betting, deployment, provider mutation, or any other action requiring a separate safety/approval gate. A standalone `Status` command may still return the expanded completed/ongoing/remaining report.
+
 ## MVP competitions
 
 - Premier League (`EPL`)
@@ -73,6 +85,9 @@ POST /auto-betting/execute
 
 ## Documentation
 
+- `AGENTS.md`
+- `docs/PROCESS_PROGRESS_REPORTING_STANDARD.md`
+- `docs/PROCESS_PROGRESS_GOVERNANCE_UPDATE_20260808.md`
 - `docs/implementation_instructions.md`
 - `docs/domain_and_hosting_domeneshop.md`
 - `docs/provider_setup.md`
