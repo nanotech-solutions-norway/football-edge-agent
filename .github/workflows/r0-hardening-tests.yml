@@ -25,5 +25,7 @@ jobs:
           python -c "import hashlib,json,os,pathlib; p=pathlib.Path('contracts/fea_pip_shadow_contract_v2.schema.json'); assert hashlib.sha256(p.read_bytes()).hexdigest()==os.environ['FEA_PIP_CONTRACT_SHA256']; d=json.loads(p.read_text()); assert d['properties']['market']['enum']==['1X2','OVER_UNDER_2_5','BTTS']; assert d['allOf'][0]['else']['properties']['probabilities']['maxItems']==0; print('shared-contract-integrity-ok')"
       - name: Preserve hard execution lock
         run: python -c "from backend.app.services.auto_betting_service import get_auto_betting_status; s=get_auto_betting_status(); assert s['hard_locked'] is True; assert s['enabled'] is False; print('fea-execution-lock-ok')"
+      - name: Compile R0 Python modules and offline runners
+        run: python -m compileall -q backend scripts
       - name: Run current FEA tests
         run: python -m pytest -q
