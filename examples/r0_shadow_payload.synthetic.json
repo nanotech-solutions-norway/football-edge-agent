@@ -1,0 +1,46 @@
+{
+  "status": "ok",
+  "contract_version": "2.0.0",
+  "platform": "atlas_probability_intelligence_platform",
+  "fixture_id": 123,
+  "sport": "football",
+  "market": "1X2",
+  "generated_at": "2026-08-08T20:00:00Z",
+  "probabilities": [
+    {
+      "selection": "home",
+      "probability": 0.4732785758222673,
+      "fair_odds": 2.112920489296636
+    },
+    {
+      "selection": "draw",
+      "probability": 0.2811629337482361,
+      "fair_odds": 3.556656585805289
+    },
+    {
+      "selection": "away",
+      "probability": 0.24555849042949673,
+      "fair_odds": 4.072349517424297
+    }
+  ],
+  "data_quality": {
+    "score": 0.9,
+    "freshness_seconds": 30,
+    "provider_count": 2,
+    "source_count": 2,
+    "consensus_status": "comparable_consensus",
+    "consensus_dispersion": 0.006320029911591973
+  },
+  "safety": {
+    "manual_review_required": true,
+    "execution_allowed": false,
+    "recommendation_release_allowed": false,
+    "bookmaker_execution_enabled": false
+  },
+  "audit": {
+    "model_version": "r0-shadow-consensus",
+    "calibration_version": "r0-none",
+    "source": "shadow",
+    "evidence_id": "synthetic-r0-cross-repo-001"
+  }
+}
