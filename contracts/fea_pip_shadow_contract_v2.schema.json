@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlas-ai.no/schemas/fea_pip_shadow_contract.v2.schema.json",
+  "title": "FEA/PIP Read-Only Shadow Probability Contract v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "contract_version", "platform", "fixture_id", "sport", "market", "generated_at", "probabilities", "data_quality", "safety", "audit"],
+  "properties": {
+    "status": {"type": "string", "enum": ["ok", "degraded", "insufficient_data"]},
+    "contract_version": {"type": "string", "const": "2.0.0"},
+    "platform": {"type": "string", "const": "atlas_probability_intelligence_platform"},
+    "fixture_id": {"type": "integer", "minimum": 1},
+    "sport": {"type": "string", "const": "football"},
+    "market": {"type": "string", "enum": ["1X2", "OVER_UNDER_2_5", "BTTS"]},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "probabilities": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["selection", "probability"],
+        "properties": {
+          "selection": {"type": "string", "enum": ["home", "draw", "away", "over_2_5", "under_2_5", "yes", "no"]},
+          "probability": {"type": "number", "minimum": 0, "maximum": 1},
+          "fair_odds": {"type": ["number", "null"], "exclusiveMinimum": 1}
+        }
+      }
+    },
+    "data_quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score", "freshness_seconds", "provider_count", "source_count", "consensus_status"],
+      "properties": {
+        "score": {"type": "number", "minimum": 0, "maximum": 1},
+        "freshness_seconds": {"type": "integer", "minimum": 0},
+        "provider_count": {"type": "integer", "minimum": 0},
+        "source_count": {"type": "integer", "minimum": 0},
+        "consensus_status": {"type": "string", "enum": ["comparable_consensus", "market_only", "insufficient_consensus"]},
+        "consensus_dispersion": {"type": ["number", "null"], "minimum": 0}
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manual_review_required", "execution_allowed", "recommendation_release_allowed", "bookmaker_execution_enabled"],
+      "properties": {
+        "manual_review_required": {"type": "boolean", "const": true},
+        "execution_allowed": {"type": "boolean", "const": false},
+        "recommendation_release_allowed": {"type": "boolean", "const": false},
+        "bookmaker_execution_enabled": {"type": "boolean", "const": false}
+      }
+    },
+    "audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model_version", "calibration_version", "source", "evidence_id"],
+      "properties": {
+        "model_version": {"type": "string", "minLength": 1},
+        "calibration_version": {"type": "string", "minLength": 1},
+        "source": {"type": "string", "enum": ["shadow", "internal_live", "backtest", "mock"]},
+        "evidence_id": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}
