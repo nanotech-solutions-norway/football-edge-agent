@@ -15,6 +15,18 @@ Implement the Phase 2 FastAPI + PostgreSQL backend foundation for the Football E
 - Supported competitions: `EPL`, `LALIGA`, `BUNDESLIGA`, `SERIE_A`, `LIGUE_1`, `UCL`, `UEL`, `NOR_ELITESERIEN`.
 - Supported markets: `1X2`, `OVER_UNDER_2_5`, `BTTS`.
 
+## Process progress reporting
+
+For all current and future work performed under these instructions, follow `../AGENTS.md` and `PROCESS_PROGRESS_REPORTING_STANDARD.md`.
+
+After every discrete process or major work step, include:
+
+```text
+Process status: [██████░░░░] 60% — <brief status>
+```
+
+The percentage must be evidence-weighted against the approved completion target. Failed, blocked, or unverified work does not increase progress. Scope changes require explicit recalculation. The progress indicator never changes or overrides the Football Edge safety posture.
+
 ## Repository Structure
 
 ```text
