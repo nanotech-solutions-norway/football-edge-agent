@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PYTHONPATH: ${{ github.workspace }}
+      FEA_PIP_CONTRACT_SHA256: a2fa4bda60c4742ea353024f2e4d4bcd854345a1e6185d892c5a40c282958349
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,8 +20,9 @@ jobs:
           python-version: '3.12'
       - name: Install existing dependencies
         run: python -m pip install -r requirements.txt
-      - name: Validate proposed shared contract JSON
-        run: python -c "import json; d=json.load(open('contracts/fea_pip_shadow_contract_v2.schema.json', encoding='utf-8')); assert d['properties']['market']['enum']==['1X2','OVER_UNDER_2_5','BTTS']; print('contract-json-ok')"
+      - name: Validate shared contract integrity and taxonomy
+        run: |
+          python -c "import hashlib,json,os,pathlib; p=pathlib.Path('contracts/fea_pip_shadow_contract_v2.schema.json'); assert hashlib.sha256(p.read_bytes()).hexdigest()==os.environ['FEA_PIP_CONTRACT_SHA256']; d=json.loads(p.read_text()); assert d['properties']['market']['enum']==['1X2','OVER_UNDER_2_5','BTTS']; assert d['allOf'][0]['else']['properties']['probabilities']['maxItems']==0; print('shared-contract-integrity-ok')"
       - name: Preserve hard execution lock
         run: python -c "from backend.app.services.auto_betting_service import get_auto_betting_status; s=get_auto_betting_status(); assert s['hard_locked'] is True; assert s['enabled'] is False; print('fea-execution-lock-ok')"
       - name: Run current FEA tests
