@@ -1,0 +1,27 @@
+name: R0 Reconciliation Hardening
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  r0-hardening:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install existing dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Validate proposed shared contract JSON
+        run: python -c "import json; d=json.load(open('contracts/fea_pip_shadow_contract_v2.schema.json', encoding='utf-8')); assert d['properties']['market']['enum']==['1X2','OVER_UNDER_2_5','BTTS']; print('contract-json-ok')"
+      - name: Preserve hard execution lock
+        run: python -c "from backend.app.services.auto_betting_service import get_auto_betting_status; s=get_auto_betting_status(); assert s['hard_locked'] is True; assert s['enabled'] is False; print('fea-execution-lock-ok')"
+      - name: Run current FEA tests
+        run: python -m pytest -q
