@@ -1,6 +1,41 @@
+# Environment and secrets
 .env
 .env.*
 !.env.example
+
+# Server-local path overrides / access-control secrets
+api_config.php
+.htpasswd
+.htpasswd*
+*.htpasswd
+
+# Temporary database diagnostics / health checks
+football_edge_db_healthcheck.php
+*_healthcheck.php
+*_db_healthcheck.php
+
+# SQL dumps, exports, backups, and compressed database files
+*.sql
+*.sql.gz
+*.dump
+*.bak
+*_dump.sql
+*_backup.sql
+*_export.sql
+*_schema.sql
+*_seed.sql
+*_migration.sql
+
+# Generated operational exports and local validation outputs
+reports/generated/
+reports/archive/
+exports/
+*_weekly_validation_export.csv
+*_weekly_validation_report.json
+*_paper_trading_report.csv
+*_paper_trading_report.json
+
+# Python caches and virtual environments
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -8,9 +43,13 @@ __pycache__/
 .ruff_cache/
 .venv/
 venv/
+
+# Logs and coverage
 *.log
+coverage.xml
+htmlcov/
+
+# Operating system and editor files
 .DS_Store
 .idea/
 .vscode/
-coverage.xml
-htmlcov/
