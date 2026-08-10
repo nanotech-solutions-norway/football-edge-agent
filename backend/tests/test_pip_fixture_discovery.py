@@ -144,6 +144,10 @@ def test_club_designators_still_require_a_unique_home_away_date_match():
         "sportsdata_io_available": 0,
         "sportsdata_io_matches": 0,
         "api_sports_available": 0,
+        "api_sports_events": 0,
+        "api_sports_date_pairs": 0,
+        "api_sports_home_pairs": 0,
+        "api_sports_full_identity_pairs": 0,
         "api_sports_matches": 0,
     }
 

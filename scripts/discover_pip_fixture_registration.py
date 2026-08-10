@@ -398,9 +398,12 @@ def _api_sports_league_id(document: Any, season: int) -> str:
     return unique[0]
 
 
-def _optional_api_sports_event(document: Any, odds_event: dict[str, Any]) -> str | None:
+def _api_sports_candidate_metrics(
+    document: Any, odds_event: dict[str, Any]
+) -> tuple[list[str], dict[str, int]]:
     items = document.get("response", []) if isinstance(document, dict) else []
     matches: list[str] = []
+    metrics = {"date_pairs": 0, "home_pairs": 0, "full_identity_pairs": 0}
     for event in items:
         if not isinstance(event, dict):
             continue
@@ -418,18 +421,25 @@ def _optional_api_sports_event(document: Any, odds_event: dict[str, Any]) -> str
             continue
         if abs((kickoff.date() - odds_event["_kickoff"].date()).days) > 1:
             continue
+        metrics["date_pairs"] += 1
         home_name = str(home.get("name", "")).strip()
         away_name = str(away.get("name", "")).strip()
         fixture_id = str(fixture.get("id", "")).strip()
-        if (
-            home_name
-            and away_name
-            and fixture_id
-            and team_names_equivalent(home_name, odds_event["home_team"])
-            and team_names_equivalent(away_name, odds_event["away_team"])
-        ):
+        if not home_name or not away_name or not fixture_id:
+            continue
+        if not team_names_equivalent(home_name, odds_event["home_team"]):
+            continue
+        metrics["home_pairs"] += 1
+        if not team_names_equivalent(away_name, odds_event["away_team"]):
+            continue
+        metrics["full_identity_pairs"] += 1
+        if fixture_id:
             matches.append(fixture_id)
-    unique = list(dict.fromkeys(matches))
+    return list(dict.fromkeys(matches)), metrics
+
+
+def _optional_api_sports_event(document: Any, odds_event: dict[str, Any]) -> str | None:
+    unique, _ = _api_sports_candidate_metrics(document, odds_event)
     return unique[0] if len(unique) == 1 else None
 
 
@@ -466,6 +476,12 @@ def build_registration_sql_from_documents(
         "sportsdata_io_available": int(sportsdata_io_document is not None),
         "sportsdata_io_matches": 0,
         "api_sports_available": int(api_sports_document is not None),
+        "api_sports_events": len(api_sports_document.get("response", []))
+        if isinstance(api_sports_document, dict) and isinstance(api_sports_document.get("response"), list)
+        else 0,
+        "api_sports_date_pairs": 0,
+        "api_sports_home_pairs": 0,
+        "api_sports_full_identity_pairs": 0,
         "api_sports_matches": 0,
     }
     matched_fixture: tuple[dict[str, Any], list[tuple[str, str]]] | None = None
@@ -494,14 +510,12 @@ def build_registration_sql_from_documents(
         if sportsdata_io_event_id is not None:
             resolution_metrics["sportsdata_io_matches"] += 1
             provider_mappings.append(("sportsdata-io", sportsdata_io_event_id))
-        api_sports_event_id = (
-            _optional_api_sports_event(api_sports_document, candidate)
-            if api_sports_document is not None
-            else None
-        )
-        if api_sports_event_id is not None:
+        api_sports_matches, api_sports_metrics = _api_sports_candidate_metrics(api_sports_document, candidate)
+        for key in ("date_pairs", "home_pairs", "full_identity_pairs"):
+            resolution_metrics[f"api_sports_{key}"] += api_sports_metrics[key]
+        if len(api_sports_matches) == 1:
             resolution_metrics["api_sports_matches"] += 1
-            provider_mappings.append(("api-sports", api_sports_event_id))
+            provider_mappings.append(("api-sports", api_sports_matches[0]))
         if not provider_mappings:
             continue
         matched_fixture = (candidate, provider_mappings)
@@ -728,6 +742,30 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                     if isinstance(document, dict) and isinstance(event, dict)
                 ]
             }
+            if not api_sports_document["response"]:
+                fixture_documents = []
+                for candidate_date in sorted({event["_kickoff"].date() for event in odds_candidates}):
+                    candidate_year = candidate_date.year
+                    league_query = urllib.parse.urlencode({"country": "Norway"})
+                    leagues = _get_json(
+                        f"https://v3.football.api-sports.io/leagues?{league_query}",
+                        api_sports_headers,
+                    )
+                    league_id = _api_sports_league_id(leagues, candidate_year)
+                    fixture_query = urllib.parse.urlencode(
+                        {"league": league_id, "season": candidate_year, "date": candidate_date.isoformat()}
+                    )
+                    fixture_documents.append(
+                        _get_json(f"https://v3.football.api-sports.io/fixtures?{fixture_query}", api_sports_headers)
+                    )
+                api_sports_document = {
+                    "response": [
+                        event
+                        for document in fixture_documents
+                        for event in document.get("response", [])
+                        if isinstance(document, dict) and isinstance(event, dict)
+                    ]
+                }
         except ValueError as error:
             api_sports_failure = error
             api_sports_document = None
@@ -776,6 +814,10 @@ def main() -> int:
                 "sportsdata_io_available",
                 "sportsdata_io_matches",
                 "api_sports_available",
+                "api_sports_events",
+                "api_sports_date_pairs",
+                "api_sports_home_pairs",
+                "api_sports_full_identity_pairs",
                 "api_sports_matches",
             )
             print("resolution_counts=" + ",".join(f"{key}:{error.metrics.get(key, 0)}" for key in metric_order))
