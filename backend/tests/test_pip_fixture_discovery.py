@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import pytest
 
 from scripts.discover_pip_fixture_registration import (
+    FixtureResolutionError,
     build_registration_sql_from_documents,
     safe_failure_code,
     team_names_equivalent,
@@ -124,8 +125,31 @@ def test_club_designators_still_require_a_unique_home_away_date_match():
         },
     ]
 
-    with pytest.raises(ValueError, match="missing or ambiguous"):
+    with pytest.raises(FixtureResolutionError, match="missing or ambiguous") as captured:
         build_registration_sql_from_documents(odds, leagues, matches, fixture_code="JG8XWK5", now=NOW)
+    assert captured.value.metrics == {
+        "odds_candidates": 2,
+        "soccerdata_events": 2,
+        "parseable_dates": 2,
+        "date_pairs": 4,
+        "home_pairs": 2,
+        "full_identity_pairs": 2,
+        "ambiguous_candidates": 1,
+    }
+
+
+def test_resolution_metrics_distinguish_unparseable_provider_dates():
+    odds, leagues, matches = documents()
+    matches[0]["matches"][0]["date"] = "not-a-date"
+
+    with pytest.raises(FixtureResolutionError) as captured:
+        build_registration_sql_from_documents(odds, leagues, matches, fixture_code="JG8XWK5", now=NOW)
+
+    assert captured.value.metrics["soccerdata_events"] == 1
+    assert captured.value.metrics["parseable_dates"] == 0
+    assert captured.value.metrics["date_pairs"] == 0
+    assert captured.value.metrics["home_pairs"] == 0
+    assert captured.value.metrics["full_identity_pairs"] == 0
 
 
 def test_adds_unambiguous_optional_sports_game_odds_mapping():
