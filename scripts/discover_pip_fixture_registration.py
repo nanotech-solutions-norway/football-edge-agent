@@ -40,6 +40,8 @@ SAFE_FAILURE_CODES = {
     "API-Sports league request failed": "api_sports_league_request",
     "API-Sports league response could not resolve Eliteserien": "api_sports_league_resolution",
     "API-Sports fixture request failed": "api_sports_fixture_request",
+    "API-Sports fixture response reported a provider restriction": "api_sports_fixture_restricted",
+    "API-Sports returned no Eliteserien fixtures for the requested season": "api_sports_empty_season",
     "protected fixture code is invalid": "fixture_code_invalid",
     "no upcoming Eliteserien event with odds was available": "odds_event_unavailable",
     "provider returned non-200 response": "provider_http_status",
@@ -398,6 +400,23 @@ def _api_sports_league_id(document: Any, season: int) -> str:
     return unique[0]
 
 
+def _api_sports_response_failure(document: Any, *, fixture_request: bool) -> ValueError | None:
+    errors = document.get("errors") if isinstance(document, dict) else None
+    if not errors:
+        return None
+    keys = errors.keys() if isinstance(errors, dict) else []
+    normalized_keys = {normalize_key(str(key)) for key in keys if str(key).strip()}
+    if normalized_keys.intersection({"token", "access", "authentication", "permission"}):
+        return ValueError("API-Sports authentication or competition access failed")
+    if normalized_keys.intersection(
+        {"requests", "rate-limit", "ratelimit", "rate-limit-per-minute", "ratelimitperminute", "quota"}
+    ):
+        return ValueError("API-Sports request quota was exceeded")
+    if fixture_request:
+        return ValueError("API-Sports fixture response reported a provider restriction")
+    return ValueError("API-Sports league request failed")
+
+
 def _api_sports_candidate_metrics(
     document: Any, odds_event: dict[str, Any]
 ) -> tuple[list[str], dict[str, int]]:
@@ -726,6 +745,9 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                     fixture_document = _get_json(
                         f"https://v3.football.api-sports.io/fixtures?{fixture_query}", api_sports_headers
                     )
+                    response_failure = _api_sports_response_failure(fixture_document, fixture_request=True)
+                    if response_failure is not None:
+                        raise response_failure
                     if not (
                         isinstance(fixture_document, dict)
                         and isinstance(fixture_document.get("response"), list)
@@ -738,6 +760,9 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                             f"https://v3.football.api-sports.io/fixtures?{season_query}",
                             api_sports_headers,
                         )
+                        response_failure = _api_sports_response_failure(fixture_document, fixture_request=True)
+                        if response_failure is not None:
+                            raise response_failure
                     fixture_documents.append(fixture_document)
                 except urllib.error.HTTPError as error:
                     if error.code in {401, 403}:
@@ -755,6 +780,8 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                     if isinstance(document, dict) and isinstance(event, dict)
                 ]
             }
+            if not api_sports_document["response"]:
+                raise ValueError("API-Sports returned no Eliteserien fixtures for the requested season")
         except ValueError as error:
             api_sports_failure = error
             api_sports_document = None
