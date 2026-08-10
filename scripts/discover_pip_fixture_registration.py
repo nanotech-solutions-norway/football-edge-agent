@@ -57,11 +57,32 @@ class FixtureResolutionError(ValueError):
     def __init__(self, metrics: dict[str, int]):
         super().__init__("secondary provider event match was missing or ambiguous")
         self.metrics = metrics
+        self.provider_failures: dict[str, str] = {}
 
 
 def safe_failure_code(error: Exception) -> str:
     """Return a stable diagnostic without exposing provider data or credentials."""
     return SAFE_FAILURE_CODES.get(str(error), "unexpected_provider_response")
+
+
+def _provider_failure_code(error: Exception) -> str:
+    """Classify provider availability without exposing response bodies or request data."""
+    if isinstance(error, urllib.error.HTTPError):
+        if error.code in {401, 403}:
+            return "auth_or_access"
+        if error.code == 404:
+            return "endpoint_not_found"
+        if error.code == 429:
+            return "quota"
+        if 500 <= error.code <= 599:
+            return "upstream_unavailable"
+        return "http_error"
+    if isinstance(error, urllib.error.URLError):
+        return "transport_error"
+    local_code = safe_failure_code(error)
+    if local_code in {"provider_response_size", "provider_decompressed_size", "provider_http_status"}:
+        return local_code
+    return "request_or_response_invalid"
 
 
 def normalize_key(value: str) -> str:
@@ -621,6 +642,7 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
     ):
         raise ValueError("required protected discovery secret is missing")
     reference_time = now or datetime.now(timezone.utc)
+    provider_failures: dict[str, str] = {}
 
     odds_query = urllib.parse.urlencode(
         {"apiKey": odds_key, "regions": "eu", "markets": "h2h", "oddsFormat": "decimal", "dateFormat": "iso"}
@@ -673,9 +695,12 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                     except Exception:
                         continue
             soccerdata_matches = _merge_soccerdata_match_documents(match_documents)
-        except Exception:
+        except Exception as error:
+            provider_failures["soccerdata"] = _provider_failure_code(error)
             soccerdata_leagues = None
             soccerdata_matches = None
+        if soccerdata_matches is not None and not _flatten_soccerdata_matches(soccerdata_matches):
+            provider_failures.setdefault("soccerdata", "empty_schedule")
 
     sports_game_odds_document = None
     if sports_game_odds_key:
@@ -695,7 +720,8 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                 f"https://api.sportsgameodds.com/v2/events?{optional_query}",
                 {"Accept": "application/json", "x-api-key": sports_game_odds_key},
             )
-        except Exception:
+        except Exception as error:
+            provider_failures["sports_game_odds"] = _provider_failure_code(error)
             sports_game_odds_document = None
 
     sportsdata_io_document = None
@@ -715,7 +741,8 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                 f"{urllib.parse.quote(competition_key, safe='')}/{urllib.parse.quote(season, safe='')}",
                 sportsdata_headers,
             )
-        except Exception:
+        except Exception as error:
+            provider_failures["sportsdata_io"] = _provider_failure_code(error)
             sportsdata_io_document = None
 
     api_sports_document = None
@@ -811,19 +838,26 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
             }
             if not api_sports_document["response"]:
                 raise ValueError("API-Sports returned no Eliteserien fixtures for the requested season")
-        except ValueError:
+        except ValueError as error:
+            provider_failures["api_sports"] = _provider_failure_code(error)
             api_sports_document = None
+    elif not api_sports_enabled:
+        provider_failures["api_sports"] = "disabled_policy"
 
-    rendered = build_registration_sql_from_documents(
-        odds_document,
-        soccerdata_leagues,
-        soccerdata_matches,
-        fixture_code=fixture_code,
-        now=reference_time,
-        sports_game_odds_document=sports_game_odds_document,
-        sportsdata_io_document=sportsdata_io_document,
-        api_sports_document=api_sports_document,
-    )
+    try:
+        rendered = build_registration_sql_from_documents(
+            odds_document,
+            soccerdata_leagues,
+            soccerdata_matches,
+            fixture_code=fixture_code,
+            now=reference_time,
+            sports_game_odds_document=sports_game_odds_document,
+            sportsdata_io_document=sportsdata_io_document,
+            api_sports_document=api_sports_document,
+        )
+    except FixtureResolutionError as error:
+        error.provider_failures = provider_failures
+        raise
     output.write_text(rendered, encoding="utf-8")
     output.chmod(0o600)
 
@@ -857,6 +891,16 @@ def main() -> int:
                 "api_sports_matches",
             )
             print("resolution_counts=" + ",".join(f"{key}:{error.metrics.get(key, 0)}" for key in metric_order))
+            if error.provider_failures:
+                provider_order = ("soccerdata", "sports_game_odds", "sportsdata_io", "api_sports")
+                print(
+                    "provider_failures="
+                    + ",".join(
+                        f"{provider}:{error.provider_failures[provider]}"
+                        for provider in provider_order
+                        if provider in error.provider_failures
+                    )
+                )
         print("credentials_logged=false payload_logged=false provider_ids_logged=false")
         return 2
     print("discovery_status=pass required_providers_matched=2 optional_provider_match_evaluated=true")

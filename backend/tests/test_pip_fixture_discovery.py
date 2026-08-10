@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -617,6 +618,40 @@ def test_discovery_continues_to_sports_game_odds_when_soccerdata_schedule_fails(
     rendered = output.read_text(encoding="utf-8")
     assert "'sports-game-odds', 'sgo-event'" in rendered
     assert "'soccerdata-api'" not in rendered
+
+
+def test_discovery_reports_sanitized_fallback_provider_failures(monkeypatch, tmp_path):
+    odds, _, _ = documents()
+
+    def fake_get_json(url, headers=None):
+        if "api.the-odds-api.com" in url:
+            return odds
+        if "api.soccerdataapi.com" in url:
+            raise HTTPError(url, 429, "sensitive", None, None)
+        if "api.sportsgameodds.com" in url:
+            raise HTTPError(url, 403, "sensitive", None, None)
+        if "api.sportsdata.io" in url:
+            raise HTTPError(url, 404, "sensitive", None, None)
+        raise AssertionError("unexpected provider URL")
+
+    monkeypatch.setenv("ODDS_API_KEY", "protected-odds-key")
+    monkeypatch.setenv("SOCCERDATA_API_KEY", "protected-soccerdata-key")
+    monkeypatch.setenv("SPORTS_GAME_ODDS_KEY", "protected-sgo-key")
+    monkeypatch.setenv("SPORTSDATA_IO_KEY", "protected-sportsdata-key")
+    monkeypatch.setenv("API_SPORTS_ENABLED", "false")
+    monkeypatch.setenv("API_SPORTS_KEY", "protected-api-sports-key")
+    monkeypatch.setenv("PIP_VALIDATION_FIXTURE_CODE", "JG8XWK5")
+    monkeypatch.setattr(discovery_module, "_get_json", fake_get_json)
+
+    with pytest.raises(FixtureResolutionError) as captured:
+        discovery_module.discover(tmp_path / "registration.sql", now=NOW)
+
+    assert captured.value.provider_failures == {
+        "soccerdata": "quota",
+        "sports_game_odds": "auth_or_access",
+        "sportsdata_io": "endpoint_not_found",
+        "api_sports": "disabled_policy",
+    }
 
 
 @pytest.mark.parametrize(
