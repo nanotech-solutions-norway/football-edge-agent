@@ -513,6 +513,7 @@ def test_discovery_falls_back_to_api_sports_candidate_date_query(monkeypatch, tm
         raise AssertionError("unexpected provider URL")
 
     monkeypatch.setenv("ODDS_API_KEY", "protected-odds-key")
+    monkeypatch.setenv("API_SPORTS_ENABLED", "true")
     monkeypatch.setenv("API_SPORTS_KEY", "protected-api-sports-key")
     monkeypatch.setenv("PIP_VALIDATION_FIXTURE_CODE", "JG8XWK5")
     for name in ("SOCCERDATA_API_KEY", "SPORTS_GAME_ODDS_KEY", "SPORTSDATA_IO_KEY"):
@@ -531,7 +532,7 @@ def test_discovery_falls_back_to_api_sports_candidate_date_query(monkeypatch, tm
     assert "'api-sports', '991122'" in output.read_text(encoding="utf-8")
 
 
-def test_discovery_preserves_api_sports_fixture_restriction_classification(monkeypatch, tmp_path):
+def test_discovery_skips_api_sports_plan_restriction_for_next_provider(monkeypatch, tmp_path):
     odds, _, _ = documents()
 
     def fake_get_json(url, headers=None):
@@ -549,17 +550,35 @@ def test_discovery_preserves_api_sports_fixture_restriction_classification(monke
             }
         if "/fixtures?" in url:
             return {"errors": {"plan": "sensitive upstream detail"}, "response": []}
+        if "api.sportsgameodds.com" in url:
+            return {
+                "data": [
+                    {
+                        "eventID": "sgo-event",
+                        "teams": {
+                            "home": {"names": {"long": "Bodø/Glimt"}},
+                            "away": {"names": {"long": "Vålerenga"}},
+                        },
+                    }
+                ]
+            }
         raise AssertionError("unexpected provider URL")
 
     monkeypatch.setenv("ODDS_API_KEY", "protected-odds-key")
+    monkeypatch.setenv("API_SPORTS_ENABLED", "true")
     monkeypatch.setenv("API_SPORTS_KEY", "protected-api-sports-key")
+    monkeypatch.setenv("SPORTS_GAME_ODDS_KEY", "protected-sgo-key")
     monkeypatch.setenv("PIP_VALIDATION_FIXTURE_CODE", "JG8XWK5")
-    for name in ("SOCCERDATA_API_KEY", "SPORTS_GAME_ODDS_KEY", "SPORTSDATA_IO_KEY"):
+    for name in ("SOCCERDATA_API_KEY", "SPORTSDATA_IO_KEY"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(discovery_module, "_get_json", fake_get_json)
+    output = tmp_path / "registration.sql"
 
-    with pytest.raises(ValueError, match="API-Sports plan does not permit fixture access"):
-        discovery_module.discover(tmp_path / "registration.sql", now=NOW)
+    discovery_module.discover(output, now=NOW)
+
+    rendered = output.read_text(encoding="utf-8")
+    assert "'sports-game-odds', 'sgo-event'" in rendered
+    assert "'api-sports'" not in rendered
 
 
 def test_discovery_continues_to_sports_game_odds_when_soccerdata_schedule_fails(monkeypatch, tmp_path):

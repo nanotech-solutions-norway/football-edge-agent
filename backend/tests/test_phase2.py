@@ -65,6 +65,8 @@ def test_provider_catalog_includes_requested_candidates_without_sportmonks():
     } <= set(providers)
     assert "sportmonks" not in providers
     assert providers["api_football"]["capabilities"]["current_odds"] is True
+    assert providers["api_football"]["status"] == "disabled_policy"
+    assert providers["api_football"]["capabilities"]["status"] == "disabled_current_tier"
     assert all(providers[name]["status"] == "missing_api_key" for name in (
         "sportsdata_io",
         "soccerdata_api",
