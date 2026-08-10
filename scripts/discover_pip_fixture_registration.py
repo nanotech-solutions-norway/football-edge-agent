@@ -22,6 +22,7 @@ from typing import Any
 
 
 FIXTURE_CODE_PATTERN = re.compile(r"^(?=.*[0-9])(?=.*[A-HJ-KM-NP-TV-Z])[0-9A-HJ-KM-NP-TV-Z]{7}$")
+CLUB_DESIGNATORS = frozenset({"afc", "bk", "fc", "ff", "fk", "fotball", "fotballklubb", "football", "if", "il", "sk"})
 
 SAFE_FAILURE_CODES = {
     "canonical key normalization failed": "canonical_key_invalid",
@@ -53,6 +54,32 @@ def normalize_key(value: str) -> str:
     if not normalized:
         raise ValueError("canonical key normalization failed")
     return normalized
+
+
+def _team_identity_tokens(value: str) -> tuple[str, ...]:
+    tokens = tuple(token for token in normalize_key(value).split("-") if token not in CLUB_DESIGNATORS)
+    return tokens or tuple(normalize_key(value).split("-"))
+
+
+def _is_acronym_label(value: str) -> bool:
+    compact = re.sub(r"[^A-Za-z0-9]", "", value)
+    return 3 <= len(compact) <= 8 and compact.isupper()
+
+
+def team_names_equivalent(left: str, right: str) -> bool:
+    left_key = normalize_key(left)
+    right_key = normalize_key(right)
+    if left_key == right_key or left_key.replace("-", "") == right_key.replace("-", ""):
+        return True
+    left_tokens = _team_identity_tokens(left)
+    right_tokens = _team_identity_tokens(right)
+    if left_tokens == right_tokens:
+        return True
+    if len(left_tokens) == 1 and len(right_tokens) == 2 and left_tokens[0] in right_tokens:
+        return _is_acronym_label(left)
+    if len(right_tokens) == 1 and len(left_tokens) == 2 and right_tokens[0] in left_tokens:
+        return _is_acronym_label(right)
+    return False
 
 
 def parse_utc(value: str) -> datetime:
@@ -148,8 +175,6 @@ def _flatten_soccerdata_matches(document: Any) -> list[dict[str, Any]]:
 
 
 def _match_soccerdata_event(document: Any, odds_event: dict[str, Any]) -> str:
-    home_key = normalize_key(odds_event["home_team"])
-    away_key = normalize_key(odds_event["away_team"])
     kickoff_date = odds_event["_kickoff"].date()
     matches: list[str] = []
     for event in _flatten_soccerdata_matches(document):
@@ -164,7 +189,9 @@ def _match_soccerdata_event(document: Any, odds_event: dict[str, Any]) -> str:
         away_name = str(away.get("name", "")).strip()
         if not home_name or not away_name:
             continue
-        if normalize_key(home_name) != home_key or normalize_key(away_name) != away_key:
+        if not team_names_equivalent(home_name, odds_event["home_team"]):
+            continue
+        if not team_names_equivalent(away_name, odds_event["away_team"]):
             continue
         raw_date = str(event.get("date", "")).strip()
         if raw_date:
@@ -184,8 +211,6 @@ def _match_soccerdata_event(document: Any, odds_event: dict[str, Any]) -> str:
 
 def _optional_sports_game_odds_event(document: Any, odds_event: dict[str, Any]) -> str | None:
     items = document.get("data", []) if isinstance(document, dict) else []
-    home_key = normalize_key(odds_event["home_team"])
-    away_key = normalize_key(odds_event["away_team"])
     matches: list[str] = []
     for event in items:
         if not isinstance(event, dict):
@@ -202,17 +227,19 @@ def _optional_sports_game_odds_event(document: Any, odds_event: dict[str, Any]) 
         if not isinstance(home_names, dict) or not isinstance(away_names, dict):
             continue
         home_candidates = {
-            normalize_key(str(name))
+            str(name)
             for name in home_names.values()
             if isinstance(name, str) and name.strip()
         }
         away_candidates = {
-            normalize_key(str(name))
+            str(name)
             for name in away_names.values()
             if isinstance(name, str) and name.strip()
         }
         event_id = str(event.get("eventID", "")).strip()
-        if home_key in home_candidates and away_key in away_candidates and event_id:
+        home_match = any(team_names_equivalent(name, odds_event["home_team"]) for name in home_candidates)
+        away_match = any(team_names_equivalent(name, odds_event["away_team"]) for name in away_candidates)
+        if home_match and away_match and event_id:
             matches.append(event_id)
     unique = list(dict.fromkeys(matches))
     return unique[0] if len(unique) == 1 else None
