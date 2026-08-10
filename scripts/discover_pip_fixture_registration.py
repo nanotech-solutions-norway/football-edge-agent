@@ -31,6 +31,7 @@ SAFE_FAILURE_CODES = {
     "Soccerdata Eliteserien league resolution was missing or ambiguous": "soccerdata_league_resolution",
     "Soccerdata Norway country resolution was missing or ambiguous": "soccerdata_country_resolution",
     "Soccerdata event match was missing or ambiguous": "soccerdata_event_resolution",
+    "Soccerdata active season resolution was ambiguous": "soccerdata_season_resolution",
     "protected fixture code is invalid": "fixture_code_invalid",
     "no upcoming Eliteserien event with odds was available": "odds_event_unavailable",
     "provider returned non-200 response": "provider_http_status",
@@ -164,6 +165,19 @@ def _soccerdata_country_id(document: Any) -> str:
     return matches[0]
 
 
+def _soccerdata_active_season(document: Any) -> str | None:
+    items = document.get("results", []) if isinstance(document, dict) else []
+    active = [
+        str(season.get("year", "")).strip()
+        for season in items
+        if isinstance(season, dict) and season.get("is_active") is True
+    ]
+    active = list(dict.fromkeys(value for value in active if value))
+    if len(active) > 1:
+        raise ValueError("Soccerdata active season resolution was ambiguous")
+    return active[0] if active else None
+
+
 def _flatten_soccerdata_matches(document: Any) -> list[dict[str, Any]]:
     if isinstance(document, dict):
         document = document.get("results", document)
@@ -178,6 +192,19 @@ def _flatten_soccerdata_matches(document: Any) -> list[dict[str, Any]]:
         elif "id" in root:
             flattened.append(root)
     return flattened
+
+
+def _merge_soccerdata_match_documents(documents: list[Any]) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for document in documents:
+        for event in _flatten_soccerdata_matches(document):
+            event_id = str(event.get("id", "")).strip()
+            if not event_id or event_id in seen_ids:
+                continue
+            seen_ids.add(event_id)
+            merged.append(event)
+    return [{"matches": merged}]
 
 
 def _soccerdata_event_date(event: dict[str, Any]):
@@ -369,13 +396,14 @@ def _get_json(url: str, headers: dict[str, str] | None = None) -> Any:
         return json.loads(body.decode("utf-8"))
 
 
-def discover(output: Path) -> None:
+def discover(output: Path, *, now: datetime | None = None) -> None:
     odds_key = os.environ.get("ODDS_API_KEY", "")
     soccerdata_key = os.environ.get("SOCCERDATA_API_KEY", "")
     sports_game_odds_key = os.environ.get("SPORTS_GAME_ODDS_KEY", "")
     fixture_code = os.environ.get("PIP_VALIDATION_FIXTURE_CODE", "")
     if not odds_key or not soccerdata_key or not fixture_code:
         raise ValueError("required protected discovery secret is missing")
+    reference_time = now or datetime.now(timezone.utc)
 
     odds_query = urllib.parse.urlencode(
         {"apiKey": odds_key, "regions": "eu", "markets": "h2h", "oddsFormat": "decimal", "dateFormat": "iso"}
@@ -390,8 +418,29 @@ def discover(output: Path) -> None:
     league_query = urllib.parse.urlencode({"country_id": country_id, "auth_token": soccerdata_key})
     soccerdata_leagues = _get_json(f"https://api.soccerdataapi.com/league/?{league_query}", soccer_headers)
     league_id = _soccerdata_league_id(soccerdata_leagues)
-    matches_query = urllib.parse.urlencode({"league_id": league_id, "auth_token": soccerdata_key})
-    soccerdata_matches = _get_json(f"https://api.soccerdataapi.com/matches/?{matches_query}", soccer_headers)
+    season_query = urllib.parse.urlencode({"league_id": league_id, "auth_token": soccerdata_key})
+    soccerdata_seasons = _get_json(f"https://api.soccerdataapi.com/season/?{season_query}", soccer_headers)
+    active_season = _soccerdata_active_season(soccerdata_seasons)
+    match_documents: list[Any] = []
+    if active_season is not None:
+        matches_query = urllib.parse.urlencode(
+            {"league_id": league_id, "season": active_season, "auth_token": soccerdata_key}
+        )
+        match_documents.append(
+            _get_json(f"https://api.soccerdataapi.com/matches/?{matches_query}", soccer_headers)
+        )
+    if not _merge_soccerdata_match_documents(match_documents)[0]["matches"]:
+        candidate_dates = sorted(
+            {event["_kickoff"].date().isoformat() for event in _odds_candidates(odds_document, reference_time)}
+        )[:14]
+        for candidate_date in candidate_dates:
+            date_query = urllib.parse.urlencode(
+                {"league_id": league_id, "date": candidate_date, "auth_token": soccerdata_key}
+            )
+            match_documents.append(
+                _get_json(f"https://api.soccerdataapi.com/matches/?{date_query}", soccer_headers)
+            )
+    soccerdata_matches = _merge_soccerdata_match_documents(match_documents)
 
     sports_game_odds_document = None
     if sports_game_odds_key:
@@ -399,7 +448,7 @@ def discover(output: Path) -> None:
             {
                 "sportID": "SOCCER",
                 "oddsAvailable": "true",
-                "startsAfter": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "startsAfter": reference_time.isoformat().replace("+00:00", "Z"),
                 "limit": "100",
             }
         )
@@ -416,7 +465,7 @@ def discover(output: Path) -> None:
         soccerdata_leagues,
         soccerdata_matches,
         fixture_code=fixture_code,
-        now=datetime.now(timezone.utc),
+        now=reference_time,
         sports_game_odds_document=sports_game_odds_document,
     )
     output.write_text(rendered, encoding="utf-8")
