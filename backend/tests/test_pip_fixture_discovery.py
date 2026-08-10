@@ -138,6 +138,8 @@ def test_club_designators_still_require_a_unique_home_away_date_match():
         "home_pairs": 2,
         "full_identity_pairs": 2,
         "ambiguous_candidates": 1,
+        "sports_game_odds_available": 0,
+        "sports_game_odds_matches": 0,
     }
 
 
@@ -331,12 +333,79 @@ def test_adds_unambiguous_optional_sports_game_odds_mapping():
     assert "'sports-game-odds', 'sgo-event'" in sql
 
 
+def test_sports_game_odds_can_be_the_required_secondary_provider():
+    odds, _, _ = documents()
+    sports_game_odds = {
+        "data": [
+            {
+                "eventID": "sgo-event",
+                "teams": {
+                    "home": {"names": {"long": "Bodø/Glimt"}},
+                    "away": {"names": {"long": "Vålerenga"}},
+                },
+            }
+        ]
+    }
+
+    sql = build_registration_sql_from_documents(
+        odds,
+        None,
+        None,
+        fixture_code="JG8XWK5",
+        now=NOW,
+        sports_game_odds_document=sports_game_odds,
+    )
+
+    assert "'odds-api', 'odds-earliest'" in sql
+    assert "'sports-game-odds', 'sgo-event'" in sql
+    assert "'soccerdata-api'" not in sql
+
+
+def test_discovery_continues_to_sports_game_odds_when_soccerdata_schedule_fails(monkeypatch, tmp_path):
+    odds, leagues, _ = documents()
+
+    def fake_get_json(url, headers=None):
+        if "api.the-odds-api.com" in url:
+            return odds
+        if "/country/" in url:
+            return {"results": [{"id": 20, "name": "Norway"}]}
+        if "/league/" in url:
+            return leagues
+        if "api.sportsgameodds.com" in url:
+            return {
+                "data": [
+                    {
+                        "eventID": "sgo-event",
+                        "teams": {
+                            "home": {"names": {"long": "Bodø/Glimt"}},
+                            "away": {"names": {"long": "Vålerenga"}},
+                        },
+                    }
+                ]
+            }
+        raise RuntimeError("upstream detail must remain private")
+
+    monkeypatch.setenv("ODDS_API_KEY", "protected-odds-key")
+    monkeypatch.setenv("SOCCERDATA_API_KEY", "protected-soccerdata-key")
+    monkeypatch.setenv("SPORTS_GAME_ODDS_KEY", "protected-sgo-key")
+    monkeypatch.setenv("PIP_VALIDATION_FIXTURE_CODE", "JG8XWK5")
+    monkeypatch.setattr(discovery_module, "_get_json", fake_get_json)
+    output = tmp_path / "registration.sql"
+
+    discovery_module.discover(output, now=NOW)
+
+    rendered = output.read_text(encoding="utf-8")
+    assert "'sports-game-odds', 'sgo-event'" in rendered
+    assert "'soccerdata-api'" not in rendered
+
+
 @pytest.mark.parametrize(
     ("message", "expected"),
     [
         ("Soccerdata Norway country resolution was missing or ambiguous", "soccerdata_country_resolution"),
         ("Soccerdata Eliteserien league resolution was missing or ambiguous", "soccerdata_league_resolution"),
         ("Soccerdata event match was missing or ambiguous", "soccerdata_event_resolution"),
+        ("secondary provider event match was missing or ambiguous", "secondary_provider_resolution"),
         ("no upcoming Eliteserien event with odds was available", "odds_event_unavailable"),
         ("protected fixture code is invalid", "fixture_code_invalid"),
     ],

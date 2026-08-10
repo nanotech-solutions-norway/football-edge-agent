@@ -16,7 +16,7 @@ import sys
 import unicodedata
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +33,7 @@ SAFE_FAILURE_CODES = {
     "Soccerdata event match was missing or ambiguous": "soccerdata_event_resolution",
     "Soccerdata active season resolution was ambiguous": "soccerdata_season_resolution",
     "Soccerdata date schedule request failed": "soccerdata_date_schedule_request",
+    "secondary provider event match was missing or ambiguous": "secondary_provider_resolution",
     "protected fixture code is invalid": "fixture_code_invalid",
     "no upcoming Eliteserien event with odds was available": "odds_event_unavailable",
     "provider returned non-200 response": "provider_http_status",
@@ -44,7 +45,7 @@ SAFE_FAILURE_CODES = {
 
 class FixtureResolutionError(ValueError):
     def __init__(self, metrics: dict[str, int]):
-        super().__init__("Soccerdata event match was missing or ambiguous")
+        super().__init__("secondary provider event match was missing or ambiguous")
         self.metrics = metrics
 
 
@@ -297,8 +298,8 @@ def _optional_sports_game_odds_event(document: Any, odds_event: dict[str, Any]) 
 
 def build_registration_sql_from_documents(
     odds_document: Any,
-    soccerdata_leagues: Any,
-    soccerdata_matches: Any,
+    soccerdata_leagues: Any | None,
+    soccerdata_matches: Any | None,
     *,
     fixture_code: str,
     now: datetime,
@@ -309,8 +310,10 @@ def build_registration_sql_from_documents(
     candidates = _odds_candidates(odds_document, now)
     if not candidates:
         raise ValueError("no upcoming Eliteserien event with odds was available")
-    _soccerdata_league_id(soccerdata_leagues)
-    soccerdata_events = _flatten_soccerdata_matches(soccerdata_matches)
+    soccerdata_available = soccerdata_leagues is not None and soccerdata_matches is not None
+    if soccerdata_available:
+        _soccerdata_league_id(soccerdata_leagues)
+    soccerdata_events = _flatten_soccerdata_matches(soccerdata_matches) if soccerdata_available else []
     resolution_metrics = {
         "odds_candidates": len(candidates),
         "soccerdata_events": len(soccerdata_events),
@@ -319,22 +322,34 @@ def build_registration_sql_from_documents(
         "home_pairs": 0,
         "full_identity_pairs": 0,
         "ambiguous_candidates": 0,
+        "sports_game_odds_available": int(sports_game_odds_document is not None),
+        "sports_game_odds_matches": 0,
     }
-    matched_fixture: tuple[dict[str, Any], str] | None = None
+    matched_fixture: tuple[dict[str, Any], list[tuple[str, str]]] | None = None
     for candidate in candidates:
+        provider_mappings: list[tuple[str, str]] = []
         matches, candidate_metrics = _soccerdata_candidate_metrics(soccerdata_events, candidate)
         for key in ("date_pairs", "home_pairs", "full_identity_pairs"):
             resolution_metrics[key] += candidate_metrics[key]
         if len(matches) > 1:
             resolution_metrics["ambiguous_candidates"] += 1
+        elif len(matches) == 1:
+            provider_mappings.append(("soccerdata-api", matches[0]))
+        sports_game_odds_event_id = (
+            _optional_sports_game_odds_event(sports_game_odds_document, candidate)
+            if sports_game_odds_document is not None
+            else None
+        )
+        if sports_game_odds_event_id is not None:
+            resolution_metrics["sports_game_odds_matches"] += 1
+            provider_mappings.append(("sports-game-odds", sports_game_odds_event_id))
+        if not provider_mappings:
             continue
-        if not matches:
-            continue
-        matched_fixture = (candidate, matches[0])
+        matched_fixture = (candidate, provider_mappings)
         break
     if matched_fixture is None:
         raise FixtureResolutionError(resolution_metrics)
-    odds_event, soccerdata_event_id = matched_fixture
+    odds_event, secondary_provider_mappings = matched_fixture
 
     competition = "nor-eliteserien"
     kickoff = odds_event["_kickoff"]
@@ -343,7 +358,7 @@ def build_registration_sql_from_documents(
     event_key = canonical_event_key(competition, kickoff, home, away)
     kickoff_sql = kickoff.strftime("%Y-%m-%d %H:%M:%S.%f")
     lines = [
-        "-- Protected automatic discovery from two authenticated providers.",
+        "-- Protected automatic discovery from at least two authenticated providers.",
         "START TRANSACTION;",
         "INSERT INTO pip_fixtures (",
         "    fixture_code, canonical_event_key, competition_key, kickoff_at,",
@@ -355,19 +370,12 @@ def build_registration_sql_from_documents(
         "SET @pip_fixture_id = LAST_INSERT_ID();",
         "INSERT INTO pip_provider_fixture_mappings (provider, provider_fixture_id, fixture_id, provider_updated_at)",
         f"VALUES ('odds-api', {sql_literal(str(odds_event['id']))}, @pip_fixture_id, NULL);",
-        "INSERT INTO pip_provider_fixture_mappings (provider, provider_fixture_id, fixture_id, provider_updated_at)",
-        f"VALUES ('soccerdata-api', {sql_literal(soccerdata_event_id)}, @pip_fixture_id, NULL);",
     ]
-    sports_game_odds_event_id = (
-        _optional_sports_game_odds_event(sports_game_odds_document, odds_event)
-        if sports_game_odds_document is not None
-        else None
-    )
-    if sports_game_odds_event_id is not None:
+    for provider, provider_fixture_id in secondary_provider_mappings:
         lines.extend(
             [
                 "INSERT INTO pip_provider_fixture_mappings (provider, provider_fixture_id, fixture_id, provider_updated_at)",
-                f"VALUES ('sports-game-odds', {sql_literal(sports_game_odds_event_id)}, @pip_fixture_id, NULL);",
+                f"VALUES ({sql_literal(provider)}, {sql_literal(provider_fixture_id)}, @pip_fixture_id, NULL);",
             ]
         )
     lines.extend(
@@ -402,7 +410,7 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
     soccerdata_key = os.environ.get("SOCCERDATA_API_KEY", "")
     sports_game_odds_key = os.environ.get("SPORTS_GAME_ODDS_KEY", "")
     fixture_code = os.environ.get("PIP_VALIDATION_FIXTURE_CODE", "")
-    if not odds_key or not soccerdata_key or not fixture_code:
+    if not odds_key or not fixture_code or not (soccerdata_key or sports_game_odds_key):
         raise ValueError("required protected discovery secret is missing")
     reference_time = now or datetime.now(timezone.utc)
 
@@ -413,58 +421,53 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
         f"https://api.the-odds-api.com/v4/sports/soccer_norway_eliteserien/odds?{odds_query}"
     )
     odds_candidates = _odds_candidates(odds_document, reference_time)
-    soccer_headers = {"Accept": "application/json", "Accept-Encoding": "gzip"}
-    country_query = urllib.parse.urlencode({"auth_token": soccerdata_key})
-    soccerdata_countries = _get_json(f"https://api.soccerdataapi.com/country/?{country_query}", soccer_headers)
-    country_id = _soccerdata_country_id(soccerdata_countries)
-    league_query = urllib.parse.urlencode({"country_id": country_id, "auth_token": soccerdata_key})
-    soccerdata_leagues = _get_json(f"https://api.soccerdataapi.com/league/?{league_query}", soccer_headers)
-    league_id = _soccerdata_league_id(soccerdata_leagues)
-    season_query = urllib.parse.urlencode({"league_id": league_id, "auth_token": soccerdata_key})
-    try:
-        soccerdata_seasons = _get_json(f"https://api.soccerdataapi.com/season/?{season_query}", soccer_headers)
-        active_season = _soccerdata_active_season(soccerdata_seasons)
-    except Exception:
-        active_season = None
-    match_documents: list[Any] = []
-    if active_season is not None:
-        matches_query = urllib.parse.urlencode(
-            {"league_id": league_id, "season": active_season, "auth_token": soccerdata_key}
-        )
-        match_documents.append(
-            _get_json(f"https://api.soccerdataapi.com/matches/?{matches_query}", soccer_headers)
-        )
-    else:
-        candidate_seasons = sorted({str(event["_kickoff"].year) for event in odds_candidates})[:2]
-        for candidate_season in candidate_seasons:
-            matches_query = urllib.parse.urlencode(
-                {"league_id": league_id, "season": candidate_season, "auth_token": soccerdata_key}
-            )
+    soccerdata_leagues = None
+    soccerdata_matches = None
+    if soccerdata_key:
+        try:
+            soccer_headers = {"Accept": "application/json", "Accept-Encoding": "gzip"}
+            country_query = urllib.parse.urlencode({"auth_token": soccerdata_key})
+            soccerdata_countries = _get_json(f"https://api.soccerdataapi.com/country/?{country_query}", soccer_headers)
+            country_id = _soccerdata_country_id(soccerdata_countries)
+            league_query = urllib.parse.urlencode({"country_id": country_id, "auth_token": soccerdata_key})
+            soccerdata_leagues = _get_json(f"https://api.soccerdataapi.com/league/?{league_query}", soccer_headers)
+            league_id = _soccerdata_league_id(soccerdata_leagues)
+            season_query = urllib.parse.urlencode({"league_id": league_id, "auth_token": soccerdata_key})
             try:
-                match_documents.append(
-                    _get_json(f"https://api.soccerdataapi.com/matches/?{matches_query}", soccer_headers)
-                )
+                soccerdata_seasons = _get_json(f"https://api.soccerdataapi.com/season/?{season_query}", soccer_headers)
+                active_season = _soccerdata_active_season(soccerdata_seasons)
             except Exception:
-                continue
-    if not _merge_soccerdata_match_documents(match_documents)[0]["matches"]:
-        candidate_dates = sorted(
-            {event["_kickoff"].date().isoformat() for event in odds_candidates}
-        )[:14]
-        successful_date_requests = 0
-        for candidate_date in candidate_dates:
-            date_query = urllib.parse.urlencode(
-                {"league_id": league_id, "date": candidate_date, "auth_token": soccerdata_key}
-            )
-            try:
-                match_documents.append(
-                    _get_json(f"https://api.soccerdataapi.com/matches/?{date_query}", soccer_headers)
+                active_season = None
+            match_documents: list[Any] = []
+            candidate_seasons = [active_season] if active_season else sorted(
+                {str(event["_kickoff"].year) for event in odds_candidates}
+            )[:2]
+            for candidate_season in candidate_seasons:
+                matches_query = urllib.parse.urlencode(
+                    {"league_id": league_id, "season": candidate_season, "auth_token": soccerdata_key}
                 )
-                successful_date_requests += 1
-            except Exception:
-                continue
-        if successful_date_requests == 0:
-            raise ValueError("Soccerdata date schedule request failed")
-    soccerdata_matches = _merge_soccerdata_match_documents(match_documents)
+                try:
+                    match_documents.append(
+                        _get_json(f"https://api.soccerdataapi.com/matches/?{matches_query}", soccer_headers)
+                    )
+                except Exception:
+                    continue
+            if not _merge_soccerdata_match_documents(match_documents)[0]["matches"]:
+                candidate_dates = sorted({event["_kickoff"].date().isoformat() for event in odds_candidates})[:14]
+                for candidate_date in candidate_dates:
+                    date_query = urllib.parse.urlencode(
+                        {"league_id": league_id, "date": candidate_date, "auth_token": soccerdata_key}
+                    )
+                    try:
+                        match_documents.append(
+                            _get_json(f"https://api.soccerdataapi.com/matches/?{date_query}", soccer_headers)
+                        )
+                    except Exception:
+                        continue
+            soccerdata_matches = _merge_soccerdata_match_documents(match_documents)
+        except Exception:
+            soccerdata_leagues = None
+            soccerdata_matches = None
 
     sports_game_odds_document = None
     if sports_game_odds_key:
@@ -473,6 +476,9 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                 "sportID": "SOCCER",
                 "oddsAvailable": "true",
                 "startsAfter": reference_time.isoformat().replace("+00:00", "Z"),
+                "startsBefore": (max(event["_kickoff"] for event in odds_candidates) + timedelta(days=2))
+                .isoformat()
+                .replace("+00:00", "Z"),
                 "limit": "100",
             }
         )
@@ -513,8 +519,10 @@ def main() -> int:
                 "home_pairs",
                 "full_identity_pairs",
                 "ambiguous_candidates",
+                "sports_game_odds_available",
+                "sports_game_odds_matches",
             )
-            print("resolution_counts=" + ",".join(f"{key}:{error.metrics[key]}" for key in metric_order))
+            print("resolution_counts=" + ",".join(f"{key}:{error.metrics.get(key, 0)}" for key in metric_order))
         print("credentials_logged=false payload_logged=false provider_ids_logged=false")
         return 2
     print("discovery_status=pass required_providers_matched=2 optional_provider_match_evaluated=true")
