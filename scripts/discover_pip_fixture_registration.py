@@ -15,6 +15,7 @@ import re
 import sys
 import unicodedata
 import urllib.parse
+import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -34,6 +35,11 @@ SAFE_FAILURE_CODES = {
     "Soccerdata active season resolution was ambiguous": "soccerdata_season_resolution",
     "Soccerdata date schedule request failed": "soccerdata_date_schedule_request",
     "secondary provider event match was missing or ambiguous": "secondary_provider_resolution",
+    "API-Sports authentication or competition access failed": "api_sports_auth_or_access",
+    "API-Sports request quota was exceeded": "api_sports_quota",
+    "API-Sports league request failed": "api_sports_league_request",
+    "API-Sports league response could not resolve Eliteserien": "api_sports_league_resolution",
+    "API-Sports fixture request failed": "api_sports_fixture_request",
     "protected fixture code is invalid": "fixture_code_invalid",
     "no upcoming Eliteserien event with odds was available": "odds_event_unavailable",
     "provider returned non-200 response": "provider_http_status",
@@ -668,6 +674,7 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
             sportsdata_io_document = None
 
     api_sports_document = None
+    api_sports_failure: ValueError | None = None
     if api_sports_key:
         api_sports_headers = {"Accept": "application/json", "x-apisports-key": api_sports_key}
         try:
@@ -677,11 +684,23 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                 league_query = urllib.parse.urlencode(
                     {"country": "Norway", "search": "Eliteserien", "season": candidate_year}
                 )
-                leagues = _get_json(
-                    f"https://v3.football.api-sports.io/leagues?{league_query}",
-                    api_sports_headers,
-                )
-                league_id = _api_sports_league_id(leagues, candidate_year)
+                try:
+                    leagues = _get_json(
+                        f"https://v3.football.api-sports.io/leagues?{league_query}",
+                        api_sports_headers,
+                    )
+                except urllib.error.HTTPError as error:
+                    if error.code in {401, 403}:
+                        raise ValueError("API-Sports authentication or competition access failed") from None
+                    if error.code == 429:
+                        raise ValueError("API-Sports request quota was exceeded") from None
+                    raise ValueError("API-Sports league request failed") from None
+                except Exception:
+                    raise ValueError("API-Sports league request failed") from None
+                try:
+                    league_id = _api_sports_league_id(leagues, candidate_year)
+                except Exception:
+                    raise ValueError("API-Sports league response could not resolve Eliteserien") from None
                 dates = [event["_kickoff"].date() for event in odds_candidates if event["_kickoff"].year == candidate_year]
                 fixture_query = urllib.parse.urlencode(
                     {
@@ -691,9 +710,18 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                         "to": max(dates).isoformat(),
                     }
                 )
-                fixture_documents.append(
-                    _get_json(f"https://v3.football.api-sports.io/fixtures?{fixture_query}", api_sports_headers)
-                )
+                try:
+                    fixture_documents.append(
+                        _get_json(f"https://v3.football.api-sports.io/fixtures?{fixture_query}", api_sports_headers)
+                    )
+                except urllib.error.HTTPError as error:
+                    if error.code in {401, 403}:
+                        raise ValueError("API-Sports authentication or competition access failed") from None
+                    if error.code == 429:
+                        raise ValueError("API-Sports request quota was exceeded") from None
+                    raise ValueError("API-Sports fixture request failed") from None
+                except Exception:
+                    raise ValueError("API-Sports fixture request failed") from None
             api_sports_document = {
                 "response": [
                     event
@@ -702,8 +730,17 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                     if isinstance(document, dict) and isinstance(event, dict)
                 ]
             }
-        except Exception:
+        except ValueError as error:
+            api_sports_failure = error
             api_sports_document = None
+
+    if (
+        api_sports_failure is not None
+        and sports_game_odds_document is None
+        and sportsdata_io_document is None
+        and not _flatten_soccerdata_matches(soccerdata_matches)
+    ):
+        raise api_sports_failure
 
     rendered = build_registration_sql_from_documents(
         odds_document,
