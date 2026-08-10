@@ -521,7 +521,11 @@ def test_discovery_falls_back_to_api_sports_full_season_schedule(monkeypatch, tm
     discovery_module.discover(output, now=NOW)
 
     assert any("from=" in url and "to=" in url for url in calls if "/fixtures?" in url)
-    assert any("season=2026" in url and "from=" not in url for url in calls if "/fixtures?" in url)
+    assert any(
+        "season=2026" in url and "next=50" in url and "from=" not in url
+        for url in calls
+        if "/fixtures?" in url
+    )
     assert "'api-sports', '991122'" in output.read_text(encoding="utf-8")
 
 
