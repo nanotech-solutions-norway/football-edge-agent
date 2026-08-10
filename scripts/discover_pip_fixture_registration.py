@@ -23,6 +23,26 @@ from typing import Any
 
 FIXTURE_CODE_PATTERN = re.compile(r"^(?=.*[0-9])(?=.*[A-HJ-KM-NP-TV-Z])[0-9A-HJ-KM-NP-TV-Z]{7}$")
 
+SAFE_FAILURE_CODES = {
+    "canonical key normalization failed": "canonical_key_invalid",
+    "provider kickoff is missing timezone": "kickoff_invalid",
+    "Odds API response must be an array": "odds_response_shape",
+    "Soccerdata Eliteserien league resolution was missing or ambiguous": "soccerdata_league_resolution",
+    "Soccerdata Norway country resolution was missing or ambiguous": "soccerdata_country_resolution",
+    "Soccerdata event match was missing or ambiguous": "soccerdata_event_resolution",
+    "protected fixture code is invalid": "fixture_code_invalid",
+    "no upcoming Eliteserien event with odds was available": "odds_event_unavailable",
+    "provider returned non-200 response": "provider_http_status",
+    "provider response size gate failed": "provider_response_size",
+    "decompressed provider response size gate failed": "provider_decompressed_size",
+    "required protected discovery secret is missing": "required_secret_missing",
+}
+
+
+def safe_failure_code(error: Exception) -> str:
+    """Return a stable diagnostic without exposing provider data or credentials."""
+    return SAFE_FAILURE_CODES.get(str(error), "unexpected_provider_response")
+
 
 def normalize_key(value: str) -> str:
     translated = value.strip().casefold().translate(
@@ -338,7 +358,7 @@ def main() -> int:
     try:
         discover(args.output)
     except Exception as error:
-        print(f"discovery_status=review error_class={type(error).__name__}")
+        print(f"discovery_status=review error_code={safe_failure_code(error)}")
         print("credentials_logged=false payload_logged=false provider_ids_logged=false")
         return 2
     print("discovery_status=pass required_providers_matched=2 optional_provider_match_evaluated=true")
