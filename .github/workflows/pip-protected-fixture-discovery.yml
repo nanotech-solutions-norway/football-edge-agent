@@ -24,6 +24,7 @@ jobs:
       ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
       SOCCERDATA_API_KEY: ${{ secrets.SOCCERDATA_API_KEY }}
       SPORTS_GAME_ODDS_KEY: ${{ secrets.SPORTS_GAME_ODDS_KEY }}
+      SPORTSDATA_IO_KEY: ${{ secrets.SPORTSDATA_IO_KEY }}
       PIP_VALIDATION_FIXTURE_CODE: ${{ secrets.PIP_VALIDATION_FIXTURE_CODE }}
     steps:
       - name: Checkout canonical FEA source

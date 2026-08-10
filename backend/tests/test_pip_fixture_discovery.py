@@ -140,6 +140,8 @@ def test_club_designators_still_require_a_unique_home_away_date_match():
         "ambiguous_candidates": 1,
         "sports_game_odds_available": 0,
         "sports_game_odds_matches": 0,
+        "sportsdata_io_available": 0,
+        "sportsdata_io_matches": 0,
     }
 
 
@@ -359,6 +361,57 @@ def test_sports_game_odds_can_be_the_required_secondary_provider():
     assert "'odds-api', 'odds-earliest'" in sql
     assert "'sports-game-odds', 'sgo-event'" in sql
     assert "'soccerdata-api'" not in sql
+
+
+def test_sportsdata_io_can_be_the_required_secondary_provider():
+    odds, _, _ = documents()
+    sportsdata_schedule = [
+        {
+            "Games": [
+                {
+                    "GameId": 812345,
+                    "DateTime": "2026-08-15T18:00:00",
+                    "HomeTeamName": "Bodø/Glimt",
+                    "AwayTeamName": "Vålerenga",
+                }
+            ]
+        }
+    ]
+
+    sql = build_registration_sql_from_documents(
+        odds,
+        None,
+        None,
+        fixture_code="JG8XWK5",
+        now=NOW,
+        sportsdata_io_document=sportsdata_schedule,
+    )
+
+    assert "'odds-api', 'odds-earliest'" in sql
+    assert "'sportsdata-io', '812345'" in sql
+    assert "'soccerdata-api'" not in sql
+
+
+def test_sportsdata_io_ambiguous_identity_fails_closed():
+    odds, _, _ = documents()
+    duplicated_game = {
+        "DateTime": "2026-08-15T18:00:00",
+        "HomeTeamName": "Bodø/Glimt",
+        "AwayTeamName": "Vålerenga",
+    }
+    sportsdata_schedule = [
+        {"Games": [{**duplicated_game, "GameId": 812345}, {**duplicated_game, "GameId": 812346}]}
+    ]
+
+    with pytest.raises(FixtureResolutionError):
+        build_registration_sql_from_documents(
+            odds,
+            None,
+            None,
+            fixture_code="JG8XWK5",
+            now=NOW,
+            sportsdata_io_document=sportsdata_schedule,
+        )
 
 
 def test_discovery_continues_to_sports_game_odds_when_soccerdata_schedule_fails(monkeypatch, tmp_path):

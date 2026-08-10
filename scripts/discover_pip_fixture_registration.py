@@ -296,6 +296,76 @@ def _optional_sports_game_odds_event(document: Any, odds_event: dict[str, Any]) 
     return unique[0] if len(unique) == 1 else None
 
 
+def _sportsdata_io_competition(document: Any) -> tuple[str, str]:
+    items = document if isinstance(document, list) else []
+    matches: list[tuple[str, str]] = []
+    for competition in items:
+        if not isinstance(competition, dict):
+            continue
+        name = str(competition.get("Name", "")).strip()
+        area = str(competition.get("AreaName", "")).strip()
+        if not name or normalize_key(name) not in {"eliteserien", "norway-eliteserien"}:
+            continue
+        if area and normalize_key(area) != "norway":
+            continue
+        competition_key = str(competition.get("Key") or competition.get("CompetitionId") or "").strip()
+        seasons = competition.get("Seasons", [])
+        current_seasons = {
+            str(season.get("Season", "")).strip()
+            for season in seasons
+            if isinstance(season, dict) and season.get("CurrentSeason") is True
+        }
+        current_seasons.discard("")
+        if competition_key and len(current_seasons) == 1:
+            matches.append((competition_key, current_seasons.pop()))
+    unique = list(dict.fromkeys(matches))
+    if len(unique) != 1:
+        raise ValueError("SportsDataIO Eliteserien competition resolution was missing or ambiguous")
+    return unique[0]
+
+
+def _flatten_sportsdata_io_games(document: Any) -> list[dict[str, Any]]:
+    roots = document if isinstance(document, list) else []
+    games: list[dict[str, Any]] = []
+    for root in roots:
+        if not isinstance(root, dict):
+            continue
+        nested = root.get("Games")
+        if isinstance(nested, list):
+            games.extend(game for game in nested if isinstance(game, dict))
+        elif "GameId" in root:
+            games.append(root)
+    return games
+
+
+def _optional_sportsdata_io_event(document: Any, odds_event: dict[str, Any]) -> str | None:
+    matches: list[str] = []
+    for event in _flatten_sportsdata_io_games(document):
+        raw_kickoff = str(event.get("DateTime", "")).strip()
+        if not raw_kickoff:
+            continue
+        try:
+            parsed = datetime.fromisoformat(raw_kickoff.replace("Z", "+00:00"))
+            kickoff = parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
+        except ValueError:
+            continue
+        if abs((kickoff.date() - odds_event["_kickoff"].date()).days) > 1:
+            continue
+        home = str(event.get("HomeTeamName", "")).strip()
+        away = str(event.get("AwayTeamName", "")).strip()
+        event_id = str(event.get("GameId", "")).strip()
+        if (
+            home
+            and away
+            and event_id
+            and team_names_equivalent(home, odds_event["home_team"])
+            and team_names_equivalent(away, odds_event["away_team"])
+        ):
+            matches.append(event_id)
+    unique = list(dict.fromkeys(matches))
+    return unique[0] if len(unique) == 1 else None
+
+
 def build_registration_sql_from_documents(
     odds_document: Any,
     soccerdata_leagues: Any | None,
@@ -304,6 +374,7 @@ def build_registration_sql_from_documents(
     fixture_code: str,
     now: datetime,
     sports_game_odds_document: Any | None = None,
+    sportsdata_io_document: Any | None = None,
 ) -> str:
     if FIXTURE_CODE_PATTERN.fullmatch(fixture_code) is None:
         raise ValueError("protected fixture code is invalid")
@@ -324,6 +395,8 @@ def build_registration_sql_from_documents(
         "ambiguous_candidates": 0,
         "sports_game_odds_available": int(sports_game_odds_document is not None),
         "sports_game_odds_matches": 0,
+        "sportsdata_io_available": int(sportsdata_io_document is not None),
+        "sportsdata_io_matches": 0,
     }
     matched_fixture: tuple[dict[str, Any], list[tuple[str, str]]] | None = None
     for candidate in candidates:
@@ -343,6 +416,14 @@ def build_registration_sql_from_documents(
         if sports_game_odds_event_id is not None:
             resolution_metrics["sports_game_odds_matches"] += 1
             provider_mappings.append(("sports-game-odds", sports_game_odds_event_id))
+        sportsdata_io_event_id = (
+            _optional_sportsdata_io_event(sportsdata_io_document, candidate)
+            if sportsdata_io_document is not None
+            else None
+        )
+        if sportsdata_io_event_id is not None:
+            resolution_metrics["sportsdata_io_matches"] += 1
+            provider_mappings.append(("sportsdata-io", sportsdata_io_event_id))
         if not provider_mappings:
             continue
         matched_fixture = (candidate, provider_mappings)
@@ -409,8 +490,9 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
     odds_key = os.environ.get("ODDS_API_KEY", "")
     soccerdata_key = os.environ.get("SOCCERDATA_API_KEY", "")
     sports_game_odds_key = os.environ.get("SPORTS_GAME_ODDS_KEY", "")
+    sportsdata_io_key = os.environ.get("SPORTSDATA_IO_KEY", "")
     fixture_code = os.environ.get("PIP_VALIDATION_FIXTURE_CODE", "")
-    if not odds_key or not fixture_code or not (soccerdata_key or sports_game_odds_key):
+    if not odds_key or not fixture_code or not (soccerdata_key or sports_game_odds_key or sportsdata_io_key):
         raise ValueError("required protected discovery secret is missing")
     reference_time = now or datetime.now(timezone.utc)
 
@@ -490,6 +572,26 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
         except Exception:
             sports_game_odds_document = None
 
+    sportsdata_io_document = None
+    if sportsdata_io_key:
+        sportsdata_headers = {
+            "Accept": "application/json",
+            "Ocp-Apim-Subscription-Key": sportsdata_io_key,
+        }
+        try:
+            competitions = _get_json(
+                "https://api.sportsdata.io/v4/soccer/scores/JSON/Competitions",
+                sportsdata_headers,
+            )
+            competition_key, season = _sportsdata_io_competition(competitions)
+            sportsdata_io_document = _get_json(
+                f"https://api.sportsdata.io/v4/soccer/scores/JSON/Schedule/"
+                f"{urllib.parse.quote(competition_key, safe='')}/{urllib.parse.quote(season, safe='')}",
+                sportsdata_headers,
+            )
+        except Exception:
+            sportsdata_io_document = None
+
     rendered = build_registration_sql_from_documents(
         odds_document,
         soccerdata_leagues,
@@ -497,6 +599,7 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
         fixture_code=fixture_code,
         now=reference_time,
         sports_game_odds_document=sports_game_odds_document,
+        sportsdata_io_document=sportsdata_io_document,
     )
     output.write_text(rendered, encoding="utf-8")
     output.chmod(0o600)
@@ -521,6 +624,8 @@ def main() -> int:
                 "ambiguous_candidates",
                 "sports_game_odds_available",
                 "sports_game_odds_matches",
+                "sportsdata_io_available",
+                "sportsdata_io_matches",
             )
             print("resolution_counts=" + ",".join(f"{key}:{error.metrics.get(key, 0)}" for key in metric_order))
         print("credentials_logged=false payload_logged=false provider_ids_logged=false")
