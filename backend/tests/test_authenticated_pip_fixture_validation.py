@@ -12,7 +12,7 @@ def valid_payload():
         "status": "ok",
         "contract_version": "2.0.0",
         "platform": "atlas_probability_intelligence_platform",
-        "fixture_id": 123,
+        "fixture_code": "7K4M2QF",
         "sport": "football",
         "market": "1X2",
         "generated_at": "2026-08-10T00:00:00Z",
@@ -53,7 +53,7 @@ def test_valid_consensus_returns_only_sanitized_summary():
     assert summary["provider_count"] == 2
     assert summary["probability_count"] == 3
     assert summary["payload_included"] is False
-    assert str(payload["fixture_id"]) not in rendered
+    assert payload["fixture_code"] not in rendered
     assert payload["audit"]["evidence_id"] not in rendered
 
 

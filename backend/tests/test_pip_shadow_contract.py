@@ -11,7 +11,7 @@ def valid_payload():
         "status": "ok",
         "contract_version": "2.0.0",
         "platform": "atlas_probability_intelligence_platform",
-        "fixture_id": 123,
+        "fixture_code": "7K4M2QF",
         "sport": "football",
         "market": "1X2",
         "generated_at": (NOW - timedelta(seconds=15)).isoformat(),
@@ -55,6 +55,15 @@ def test_execution_true_is_hard_contract_failure():
     result = validate_shadow_payload(payload)
     assert result.valid is False
     assert "safety_violation_execution_allowed" in result.errors
+
+
+def test_numeric_or_ambiguous_fixture_code_is_rejected():
+    for fixture_code in (1234567, "1234567", "ABCDEFG", "12O4ABC"):
+        payload = valid_payload()
+        payload["fixture_code"] = fixture_code
+        result = validate_shadow_payload(payload)
+        assert result.valid is False
+        assert "invalid_fixture_code" in result.errors
 
 
 def test_recommendation_release_true_is_hard_contract_failure():

@@ -71,14 +71,14 @@ http://localhost:8000/docs
 GET  /health
 GET  /providers/status
 GET  /fixtures/upcoming
-GET  /fixtures/{fixture_id}
-GET  /odds/current/{fixture_id}
-GET  /odds/history/{fixture_id}
-GET  /xg/{fixture_id}
-GET  /lineups/{fixture_id}
-GET  /injuries/{fixture_id}
-GET  /data-quality/{fixture_id}
-GET  /audit/fixture/{fixture_id}
+GET  /fixtures/{fixture_code}
+GET  /odds/current/{fixture_code}
+GET  /odds/history/{fixture_code}
+GET  /xg/{fixture_code}
+GET  /lineups/{fixture_code}
+GET  /injuries/{fixture_code}
+GET  /data-quality/{fixture_code}
+GET  /audit/fixture/{fixture_code}
 GET  /auto-betting/status
 POST /auto-betting/execute
 ```

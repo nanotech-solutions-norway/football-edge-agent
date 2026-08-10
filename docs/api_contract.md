@@ -25,14 +25,14 @@ https://api.your-domain.no
 | GET | `/health` | Service health and governance posture | Implemented |
 | GET | `/providers/status` | Provider configuration and capability status | Implemented placeholder |
 | GET | `/fixtures/upcoming` | Upcoming fixtures filtered by competition/date | Implemented placeholder |
-| GET | `/fixtures/{fixture_id}` | Fixture detail | Implemented placeholder |
-| GET | `/odds/current/{fixture_id}` | Current odds snapshots | Implemented placeholder |
-| GET | `/odds/history/{fixture_id}` | Historical odds snapshots/imports | Implemented placeholder |
-| GET | `/xg/{fixture_id}` | xG observations | Implemented placeholder |
-| GET | `/lineups/{fixture_id}` | Lineup data | Implemented placeholder |
-| GET | `/injuries/{fixture_id}` | Injuries and suspensions | Implemented placeholder |
-| GET | `/data-quality/{fixture_id}` | Data-quality score and mandatory-data checks | Implemented placeholder |
-| GET | `/audit/fixture/{fixture_id}` | Fixture audit trail | Implemented placeholder |
+| GET | `/fixtures/{fixture_code}` | Fixture detail | Implemented placeholder |
+| GET | `/odds/current/{fixture_code}` | Current odds snapshots | Implemented placeholder |
+| GET | `/odds/history/{fixture_code}` | Historical odds snapshots/imports | Implemented placeholder |
+| GET | `/xg/{fixture_code}` | xG observations | Implemented placeholder |
+| GET | `/lineups/{fixture_code}` | Lineup data | Implemented placeholder |
+| GET | `/injuries/{fixture_code}` | Injuries and suspensions | Implemented placeholder |
+| GET | `/data-quality/{fixture_code}` | Data-quality score and mandatory-data checks | Implemented placeholder |
+| GET | `/audit/fixture/{fixture_code}` | Fixture audit trail | Implemented placeholder |
 | GET | `/auto-betting/status` | Auto-betting status | Implemented |
 | POST | `/auto-betting/execute` | Execution endpoint placeholder | Blocked with 403 |
 

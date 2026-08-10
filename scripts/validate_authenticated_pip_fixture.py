@@ -45,7 +45,7 @@ def sanitized_validation_summary(
         "real_money_betting_enabled": False,
         "bookmaker_execution_enabled": False,
         "payload_included": False,
-        "fixture_id_included": False,
+        "fixture_code_included": False,
         "provider_names_included": False,
     }
     return summary, 0 if passed else 2
@@ -78,7 +78,7 @@ def main() -> int:
             "real_money_betting_enabled": False,
             "bookmaker_execution_enabled": False,
             "payload_included": False,
-            "fixture_id_included": False,
+            "fixture_code_included": False,
             "provider_names_included": False,
         }
         exit_code = 2

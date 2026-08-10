@@ -1,0 +1,50 @@
+name: PIP Protected Fixture Discovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pip-protected-fixture-discovery
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  discover:
+    name: Discover matched PIP fixture and build SQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: pip-authenticated-readonly-validation
+    env:
+      ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+      SOCCERDATA_API_KEY: ${{ secrets.SOCCERDATA_API_KEY }}
+      SPORTS_GAME_ODDS_KEY: ${{ secrets.SPORTS_GAME_ODDS_KEY }}
+      PIP_VALIDATION_FIXTURE_CODE: ${{ secrets.PIP_VALIDATION_FIXTURE_CODE }}
+      PIP_FIXTURE_SQL_PATH: ${{ runner.temp }}/pip-fixture-registration.sql
+    steps:
+      - name: Checkout canonical FEA source
+        uses: actions/checkout@v4
+
+      - name: Discover earliest matched Eliteserien fixture
+        run: python scripts/discover_pip_fixture_registration.py --output "${PIP_FIXTURE_SQL_PATH}"
+
+      - name: Upload protected registration SQL
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-fixture-registration-sql
+          path: ${{ env.PIP_FIXTURE_SQL_PATH }}
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Remove ephemeral registration SQL
+        if: always()
+        shell: bash
+        run: |
+          rm -f -- "${PIP_FIXTURE_SQL_PATH}"
+          echo "ephemeral_sql_removed=true"
+          echo "sql_logged=false"

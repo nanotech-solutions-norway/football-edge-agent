@@ -24,7 +24,7 @@ jobs:
       url: https://pip.atlas-ai.no/fixture.php
     env:
       PIP_API_KEY: ${{ secrets.PIP_API_KEY }}
-      PIP_VALIDATION_FIXTURE_ID: ${{ secrets.PIP_VALIDATION_FIXTURE_ID }}
+      PIP_VALIDATION_FIXTURE_CODE: ${{ secrets.PIP_VALIDATION_FIXTURE_CODE }}
       PIP_PAYLOAD_PATH: ${{ runner.temp }}/pip-fixture.json
     steps:
       - name: Checkout canonical FEA source
@@ -37,6 +37,7 @@ jobs:
           python3 - <<'PY'
           import os
           import pathlib
+          import re
           import sys
           import urllib.error
           import urllib.parse
@@ -44,20 +45,20 @@ jobs:
 
           endpoint = "https://pip.atlas-ai.no/fixture.php"
           api_key = os.environ.get("PIP_API_KEY", "")
-          fixture_id = os.environ.get("PIP_VALIDATION_FIXTURE_ID", "")
+          fixture_code = os.environ.get("PIP_VALIDATION_FIXTURE_CODE", "")
           output = pathlib.Path(os.environ["PIP_PAYLOAD_PATH"])
           if not api_key:
               print("validation_prerequisite=missing_api_key")
               sys.exit(1)
-          if not fixture_id.isdigit() or int(fixture_id) < 1:
-              print("validation_prerequisite=missing_or_invalid_fixture_id")
+          if re.fullmatch(r"(?=.*[0-9])(?=.*[A-HJ-KM-NP-TV-Z])[0-9A-HJ-KM-NP-TV-Z]{7}", fixture_code) is None:
+              print("validation_prerequisite=missing_or_invalid_fixture_code")
               sys.exit(1)
 
           class NoRedirect(urllib.request.HTTPRedirectHandler):
               def redirect_request(self, req, fp, code, msg, headers, newurl):
                   return None
 
-          query = urllib.parse.urlencode({"fixture_id": fixture_id, "market": "1X2"})
+          query = urllib.parse.urlencode({"fixture_code": fixture_code, "market": "1X2"})
           request = urllib.request.Request(
               f"{endpoint}?{query}",
               headers={"X-PIP-API-Key": api_key, "Accept": "application/json"},
@@ -76,7 +77,7 @@ jobs:
               body = b""
           finally:
               api_key = None
-              fixture_id = None
+              fixture_code = None
               if response is not None:
                   response.close()
 
