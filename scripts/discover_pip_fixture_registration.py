@@ -681,9 +681,7 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
             candidate_years = sorted({event["_kickoff"].year for event in odds_candidates})
             fixture_documents: list[dict[str, Any]] = []
             for candidate_year in candidate_years:
-                league_query = urllib.parse.urlencode(
-                    {"country": "Norway", "search": "Eliteserien", "season": candidate_year}
-                )
+                league_query = urllib.parse.urlencode({"country": "Norway"})
                 try:
                     leagues = _get_json(
                         f"https://v3.football.api-sports.io/leagues?{league_query}",

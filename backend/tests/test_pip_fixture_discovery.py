@@ -6,6 +6,7 @@ import pytest
 import scripts.discover_pip_fixture_registration as discovery_module
 from scripts.discover_pip_fixture_registration import (
     FixtureResolutionError,
+    _api_sports_league_id,
     _soccerdata_active_season,
     build_registration_sql_from_documents,
     safe_failure_code,
@@ -170,6 +171,25 @@ def test_active_soccerdata_season_is_unique_and_optional():
         _soccerdata_active_season(
             {"results": [{"year": "2026", "is_active": True}, {"year": "2026-2027", "is_active": True}]}
         )
+
+
+def test_api_sports_league_is_resolved_from_country_catalog_and_requested_season():
+    leagues = {
+        "response": [
+            {
+                "league": {"id": 103, "name": "Eliteserien"},
+                "country": {"name": "Norway"},
+                "seasons": [{"year": 2025}, {"year": 2026}],
+            },
+            {
+                "league": {"id": 104, "name": "1. Division"},
+                "country": {"name": "Norway"},
+                "seasons": [{"year": 2026}],
+            },
+        ]
+    }
+
+    assert _api_sports_league_id(leagues, 2026) == "103"
 
 
 def test_discovery_falls_back_to_candidate_dates_when_active_schedule_is_empty(monkeypatch, tmp_path):
