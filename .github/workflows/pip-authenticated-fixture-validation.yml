@@ -25,7 +25,6 @@ jobs:
     env:
       PIP_API_KEY: ${{ secrets.PIP_API_KEY }}
       PIP_VALIDATION_FIXTURE_CODE: ${{ secrets.PIP_VALIDATION_FIXTURE_CODE }}
-      PIP_PAYLOAD_PATH: ${{ runner.temp }}/pip-fixture.json
     steps:
       - name: Checkout canonical FEA source
         uses: actions/checkout@v4
@@ -46,7 +45,7 @@ jobs:
           endpoint = "https://pip.atlas-ai.no/fixture.php"
           api_key = os.environ.get("PIP_API_KEY", "")
           fixture_code = os.environ.get("PIP_VALIDATION_FIXTURE_CODE", "")
-          output = pathlib.Path(os.environ["PIP_PAYLOAD_PATH"])
+          output = pathlib.Path(os.environ["RUNNER_TEMP"]) / "pip-fixture.json"
           if not api_key:
               print("validation_prerequisite=missing_api_key")
               sys.exit(1)
@@ -97,12 +96,12 @@ jobs:
           PY
 
       - name: Validate through the FEA fail-closed shadow contract gate
-        run: python scripts/validate_authenticated_pip_fixture.py "${PIP_PAYLOAD_PATH}" --max-age-seconds 900
+        run: python scripts/validate_authenticated_pip_fixture.py "${RUNNER_TEMP}/pip-fixture.json" --max-age-seconds 900
 
       - name: Remove ephemeral fixture payload
         if: always()
         shell: bash
         run: |
-          rm -f -- "${PIP_PAYLOAD_PATH}"
+          rm -f -- "${RUNNER_TEMP}/pip-fixture.json"
           echo "ephemeral_payload_removed=true"
           echo "payload_included=false"

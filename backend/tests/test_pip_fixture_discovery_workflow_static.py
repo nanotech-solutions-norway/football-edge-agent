@@ -23,3 +23,15 @@ def test_powershell_dispatcher_never_requests_provider_credentials():
     assert "Read-Host" not in script
     assert "ODDS_API_KEY" not in script
     assert "SOCCERDATA_API_KEY" not in script
+
+
+def test_runner_context_is_not_used_in_job_level_environment():
+    workflow_paths = (
+        ".github/workflows/pip-protected-fixture-discovery.yml",
+        ".github/workflows/pip-authenticated-fixture-validation.yml",
+    )
+    for workflow_path in workflow_paths:
+        workflow = (ROOT / workflow_path).read_text(encoding="utf-8")
+        job_preamble = workflow.split("    steps:", maxsplit=1)[0]
+        assert "${{ runner.temp }}" not in job_preamble
+        assert "RUNNER_TEMP" in workflow
