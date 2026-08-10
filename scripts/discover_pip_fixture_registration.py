@@ -366,6 +366,67 @@ def _optional_sportsdata_io_event(document: Any, odds_event: dict[str, Any]) -> 
     return unique[0] if len(unique) == 1 else None
 
 
+def _api_sports_league_id(document: Any, season: int) -> str:
+    items = document.get("response", []) if isinstance(document, dict) else []
+    matches: list[str] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        league = item.get("league", {})
+        country = item.get("country", {})
+        seasons = item.get("seasons", [])
+        if not isinstance(league, dict) or not isinstance(country, dict):
+            continue
+        if normalize_key(str(league.get("name", ""))) != "eliteserien":
+            continue
+        if normalize_key(str(country.get("name", ""))) != "norway":
+            continue
+        if not any(isinstance(value, dict) and value.get("year") == season for value in seasons):
+            continue
+        league_id = str(league.get("id", "")).strip()
+        if league_id:
+            matches.append(league_id)
+    unique = list(dict.fromkeys(matches))
+    if len(unique) != 1:
+        raise ValueError("API-Sports Eliteserien league resolution was missing or ambiguous")
+    return unique[0]
+
+
+def _optional_api_sports_event(document: Any, odds_event: dict[str, Any]) -> str | None:
+    items = document.get("response", []) if isinstance(document, dict) else []
+    matches: list[str] = []
+    for event in items:
+        if not isinstance(event, dict):
+            continue
+        fixture = event.get("fixture", {})
+        teams = event.get("teams", {})
+        if not isinstance(fixture, dict) or not isinstance(teams, dict):
+            continue
+        home = teams.get("home", {})
+        away = teams.get("away", {})
+        if not isinstance(home, dict) or not isinstance(away, dict):
+            continue
+        try:
+            kickoff = parse_utc(str(fixture.get("date", "")))
+        except (TypeError, ValueError):
+            continue
+        if abs((kickoff.date() - odds_event["_kickoff"].date()).days) > 1:
+            continue
+        home_name = str(home.get("name", "")).strip()
+        away_name = str(away.get("name", "")).strip()
+        fixture_id = str(fixture.get("id", "")).strip()
+        if (
+            home_name
+            and away_name
+            and fixture_id
+            and team_names_equivalent(home_name, odds_event["home_team"])
+            and team_names_equivalent(away_name, odds_event["away_team"])
+        ):
+            matches.append(fixture_id)
+    unique = list(dict.fromkeys(matches))
+    return unique[0] if len(unique) == 1 else None
+
+
 def build_registration_sql_from_documents(
     odds_document: Any,
     soccerdata_leagues: Any | None,
@@ -375,6 +436,7 @@ def build_registration_sql_from_documents(
     now: datetime,
     sports_game_odds_document: Any | None = None,
     sportsdata_io_document: Any | None = None,
+    api_sports_document: Any | None = None,
 ) -> str:
     if FIXTURE_CODE_PATTERN.fullmatch(fixture_code) is None:
         raise ValueError("protected fixture code is invalid")
@@ -397,6 +459,8 @@ def build_registration_sql_from_documents(
         "sports_game_odds_matches": 0,
         "sportsdata_io_available": int(sportsdata_io_document is not None),
         "sportsdata_io_matches": 0,
+        "api_sports_available": int(api_sports_document is not None),
+        "api_sports_matches": 0,
     }
     matched_fixture: tuple[dict[str, Any], list[tuple[str, str]]] | None = None
     for candidate in candidates:
@@ -424,6 +488,14 @@ def build_registration_sql_from_documents(
         if sportsdata_io_event_id is not None:
             resolution_metrics["sportsdata_io_matches"] += 1
             provider_mappings.append(("sportsdata-io", sportsdata_io_event_id))
+        api_sports_event_id = (
+            _optional_api_sports_event(api_sports_document, candidate)
+            if api_sports_document is not None
+            else None
+        )
+        if api_sports_event_id is not None:
+            resolution_metrics["api_sports_matches"] += 1
+            provider_mappings.append(("api-sports", api_sports_event_id))
         if not provider_mappings:
             continue
         matched_fixture = (candidate, provider_mappings)
@@ -491,8 +563,11 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
     soccerdata_key = os.environ.get("SOCCERDATA_API_KEY", "")
     sports_game_odds_key = os.environ.get("SPORTS_GAME_ODDS_KEY", "")
     sportsdata_io_key = os.environ.get("SPORTSDATA_IO_KEY", "")
+    api_sports_key = os.environ.get("API_SPORTS_KEY", "")
     fixture_code = os.environ.get("PIP_VALIDATION_FIXTURE_CODE", "")
-    if not odds_key or not fixture_code or not (soccerdata_key or sports_game_odds_key or sportsdata_io_key):
+    if not odds_key or not fixture_code or not (
+        soccerdata_key or sports_game_odds_key or sportsdata_io_key or api_sports_key
+    ):
         raise ValueError("required protected discovery secret is missing")
     reference_time = now or datetime.now(timezone.utc)
 
@@ -592,6 +667,44 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
         except Exception:
             sportsdata_io_document = None
 
+    api_sports_document = None
+    if api_sports_key:
+        api_sports_headers = {"Accept": "application/json", "x-apisports-key": api_sports_key}
+        try:
+            candidate_years = sorted({event["_kickoff"].year for event in odds_candidates})
+            fixture_documents: list[dict[str, Any]] = []
+            for candidate_year in candidate_years:
+                league_query = urllib.parse.urlencode(
+                    {"country": "Norway", "search": "Eliteserien", "season": candidate_year}
+                )
+                leagues = _get_json(
+                    f"https://v3.football.api-sports.io/leagues?{league_query}",
+                    api_sports_headers,
+                )
+                league_id = _api_sports_league_id(leagues, candidate_year)
+                dates = [event["_kickoff"].date() for event in odds_candidates if event["_kickoff"].year == candidate_year]
+                fixture_query = urllib.parse.urlencode(
+                    {
+                        "league": league_id,
+                        "season": candidate_year,
+                        "from": min(dates).isoformat(),
+                        "to": max(dates).isoformat(),
+                    }
+                )
+                fixture_documents.append(
+                    _get_json(f"https://v3.football.api-sports.io/fixtures?{fixture_query}", api_sports_headers)
+                )
+            api_sports_document = {
+                "response": [
+                    event
+                    for document in fixture_documents
+                    for event in document.get("response", [])
+                    if isinstance(document, dict) and isinstance(event, dict)
+                ]
+            }
+        except Exception:
+            api_sports_document = None
+
     rendered = build_registration_sql_from_documents(
         odds_document,
         soccerdata_leagues,
@@ -600,6 +713,7 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
         now=reference_time,
         sports_game_odds_document=sports_game_odds_document,
         sportsdata_io_document=sportsdata_io_document,
+        api_sports_document=api_sports_document,
     )
     output.write_text(rendered, encoding="utf-8")
     output.chmod(0o600)
@@ -626,6 +740,8 @@ def main() -> int:
                 "sports_game_odds_matches",
                 "sportsdata_io_available",
                 "sportsdata_io_matches",
+                "api_sports_available",
+                "api_sports_matches",
             )
             print("resolution_counts=" + ",".join(f"{key}:{error.metrics.get(key, 0)}" for key in metric_order))
         print("credentials_logged=false payload_logged=false provider_ids_logged=false")
