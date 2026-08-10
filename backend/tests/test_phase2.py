@@ -42,3 +42,26 @@ def test_supported_competitions_include_eliteserien_only_code():
     assert response.status_code == 200
     supported = response.json()["metadata"]["supported_competitions"]
     assert "NOR_ELITESERIEN" in supported
+
+
+def test_provider_catalog_includes_requested_candidates_without_sportmonks():
+    response = client.get("/providers/status")
+    assert response.status_code == 200
+    providers = response.json()["data"]
+    assert {
+        "api_football",
+        "odds_api",
+        "sportsdata_io",
+        "soccerdata_api",
+        "sports_game_odds",
+        "sharpapi",
+        "statsbomb",
+    } <= set(providers)
+    assert "sportmonks" not in providers
+    assert providers["api_football"]["capabilities"]["current_odds"] is True
+    assert all(providers[name]["status"] == "missing_api_key" for name in (
+        "sportsdata_io",
+        "soccerdata_api",
+        "sports_game_odds",
+        "sharpapi",
+    ))

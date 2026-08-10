@@ -1,0 +1,107 @@
+name: FEA Authenticated PIP Fixture Validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fea-authenticated-pip-fixture-validation
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  validate-authenticated-fixture:
+    name: Validate ephemeral PIP v2 fixture through FEA
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: pip-authenticated-readonly-validation
+      url: https://pip.atlas-ai.no/fixture.php
+    env:
+      PIP_API_KEY: ${{ secrets.PIP_API_KEY }}
+      PIP_VALIDATION_FIXTURE_ID: ${{ secrets.PIP_VALIDATION_FIXTURE_ID }}
+      PIP_PAYLOAD_PATH: ${{ runner.temp }}/pip-fixture.json
+    steps:
+      - name: Checkout canonical FEA source
+        uses: actions/checkout@v4
+
+      - name: Fetch authenticated fixture into ephemeral runner storage
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import sys
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          endpoint = "https://pip.atlas-ai.no/fixture.php"
+          api_key = os.environ.get("PIP_API_KEY", "")
+          fixture_id = os.environ.get("PIP_VALIDATION_FIXTURE_ID", "")
+          output = pathlib.Path(os.environ["PIP_PAYLOAD_PATH"])
+          if not api_key:
+              print("validation_prerequisite=missing_api_key")
+              sys.exit(1)
+          if not fixture_id.isdigit() or int(fixture_id) < 1:
+              print("validation_prerequisite=missing_or_invalid_fixture_id")
+              sys.exit(1)
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+          query = urllib.parse.urlencode({"fixture_id": fixture_id, "market": "1X2"})
+          request = urllib.request.Request(
+              f"{endpoint}?{query}",
+              headers={"X-PIP-API-Key": api_key, "Accept": "application/json"},
+              method="GET",
+          )
+          opener = urllib.request.build_opener(NoRedirect)
+          response = None
+          try:
+              response = opener.open(request, timeout=20)
+              status = response.status
+              content_type = response.headers.get_content_type()
+              body = response.read(1_000_001)
+          except urllib.error.HTTPError as error:
+              status = error.code
+              content_type = error.headers.get_content_type()
+              body = b""
+          finally:
+              api_key = None
+              fixture_id = None
+              if response is not None:
+                  response.close()
+
+          print(f"http_status={status}")
+          print(f"content_type={content_type}")
+          print("redirects_followed=false")
+          print("payload_logged=false")
+          if status != 200 or content_type != "application/json":
+              sys.exit(1)
+          if not body or len(body) > 1_000_000:
+              print("payload_size_gate=review")
+              sys.exit(1)
+          output.write_bytes(body)
+          output.chmod(0o600)
+          print(f"payload_bytes={len(body)}")
+          print("payload_storage=ephemeral_runner_only")
+          PY
+
+      - name: Validate through the FEA fail-closed shadow contract gate
+        run: python scripts/validate_authenticated_pip_fixture.py "${PIP_PAYLOAD_PATH}" --max-age-seconds 900
+
+      - name: Remove ephemeral fixture payload
+        if: always()
+        shell: bash
+        run: |
+          rm -f -- "${PIP_PAYLOAD_PATH}"
+          echo "ephemeral_payload_removed=true"
+          echo "payload_included=false"

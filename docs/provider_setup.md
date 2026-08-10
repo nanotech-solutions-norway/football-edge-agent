@@ -21,10 +21,15 @@ This document defines the Phase 2 provider setup plan for fixtures, results, cur
 
 | Provider | Candidate Role | Notes |
 |---|---|---|
-| API-FOOTBALL | Fixtures, results, lineups, injuries candidate | Validate competition IDs and coverage depth |
+| API Sports — API-FOOTBALL | Fixtures, results, current odds, lineups, injuries candidate | Existing `api_football` integration; validate competition IDs and coverage depth |
 | The Odds API | Current odds and historical odds candidate | Validate market coverage and historical depth |
-| Sportmonks | Combined football data candidate | Validate xG, odds, lineups, injuries, Eliteserien coverage |
+| SportsDataIO Soccer API | Fixtures, results, odds, lineups, injuries candidate | Validate licensed feeds, historical warehouse access, and competition coverage |
+| Soccerdata API | Fixtures, results, current odds, lineups, injuries candidate | Validate market, league, timestamp, and data-depth coverage |
+| SportsGameOdds | Fixtures/results, current odds, and lineup candidate | Validate soccer leagues, bookmakers, market mapping, and timestamps |
+| SharpAPI | Current-odds candidate | Validate major-soccer coverage, event identity, market mapping, and timestamps |
 | StatsBomb | xG candidate | Validate access, licensing, and competition coverage |
+
+Every entry is candidate-only. Configuration or fixture-ID extraction support does not establish an active subscription, legal entitlement, competition coverage, live ingestion, or suitability for the comparable-consensus gate.
 
 ## Approved MVP Competitions
 
@@ -50,11 +55,16 @@ Add provider credentials to `.env`:
 ```text
 API_FOOTBALL_KEY=...
 ODDS_API_KEY=...
-SPORTMONKS_KEY=...
+SPORTSDATA_IO_KEY=...
+SOCCERDATA_API_KEY=...
+SPORTS_GAME_ODDS_KEY=...
+SHARPAPI_KEY=...
 STATSBOMB_KEY=...
 ```
 
 Do not commit `.env` to GitHub.
+
+Use server-side secret storage only. API Sports' soccer product is represented by the existing `API_FOOTBALL_*` settings; do not create a second duplicate API Sports credential.
 
 ## Provider Validation Procedure
 

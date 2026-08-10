@@ -38,17 +38,32 @@ def get_provider_clients() -> dict[str, ProviderClient]:
         "api_football": ProviderClient(
             "api_football",
             settings.api_football_key != "replace_with_api_key",
-            ProviderCapability("api_football", True, True, False, False, False, True, True, True, "candidate"),
+            ProviderCapability("api_football", True, True, True, False, False, True, True, True, "candidate"),
         ),
         "odds_api": ProviderClient(
             "odds_api",
             settings.odds_api_key != "replace_with_api_key",
             ProviderCapability("odds_api", False, False, True, True, False, False, False, True, "candidate"),
         ),
-        "sportmonks": ProviderClient(
-            "sportmonks",
-            settings.sportmonks_key != "replace_with_api_key",
-            ProviderCapability("sportmonks", True, True, True, True, True, True, True, True, "candidate"),
+        "sportsdata_io": ProviderClient(
+            "sportsdata_io",
+            settings.sportsdata_io_key != "replace_with_api_key",
+            ProviderCapability("sportsdata_io", True, True, True, True, False, True, True, True, "candidate"),
+        ),
+        "soccerdata_api": ProviderClient(
+            "soccerdata_api",
+            settings.soccerdata_api_key != "replace_with_api_key",
+            ProviderCapability("soccerdata_api", True, True, True, False, False, True, True, True, "candidate"),
+        ),
+        "sports_game_odds": ProviderClient(
+            "sports_game_odds",
+            settings.sports_game_odds_key != "replace_with_api_key",
+            ProviderCapability("sports_game_odds", True, True, True, False, False, True, False, True, "candidate"),
+        ),
+        "sharpapi": ProviderClient(
+            "sharpapi",
+            settings.sharpapi_key != "replace_with_api_key",
+            ProviderCapability("sharpapi", True, False, True, False, False, False, False, True, "candidate"),
         ),
         "statsbomb": ProviderClient(
             "statsbomb",
