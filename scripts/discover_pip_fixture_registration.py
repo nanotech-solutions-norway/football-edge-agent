@@ -40,6 +40,12 @@ SAFE_FAILURE_CODES = {
 }
 
 
+class FixtureResolutionError(ValueError):
+    def __init__(self, metrics: dict[str, int]):
+        super().__init__("Soccerdata event match was missing or ambiguous")
+        self.metrics = metrics
+
+
 def safe_failure_code(error: Exception) -> str:
     """Return a stable diagnostic without exposing provider data or credentials."""
     return SAFE_FAILURE_CODES.get(str(error), "unexpected_provider_response")
@@ -174,10 +180,27 @@ def _flatten_soccerdata_matches(document: Any) -> list[dict[str, Any]]:
     return flattened
 
 
-def _match_soccerdata_event(document: Any, odds_event: dict[str, Any]) -> str:
+def _soccerdata_event_date(event: dict[str, Any]):
+    raw_date = str(event.get("date", "")).strip()
+    if not raw_date:
+        return None
+    try:
+        return datetime.strptime(raw_date.replace("-", "/"), "%d/%m/%Y").date()
+    except ValueError:
+        return None
+
+
+def _soccerdata_candidate_metrics(
+    events: list[dict[str, Any]], odds_event: dict[str, Any]
+) -> tuple[list[str], dict[str, int]]:
     kickoff_date = odds_event["_kickoff"].date()
     matches: list[str] = []
-    for event in _flatten_soccerdata_matches(document):
+    metrics = {"date_pairs": 0, "home_pairs": 0, "full_identity_pairs": 0}
+    for event in events:
+        event_date = _soccerdata_event_date(event)
+        if event_date is None or abs((event_date - kickoff_date).days) > 1:
+            continue
+        metrics["date_pairs"] += 1
         teams = event.get("teams", {})
         if not isinstance(teams, dict):
             continue
@@ -191,20 +214,19 @@ def _match_soccerdata_event(document: Any, odds_event: dict[str, Any]) -> str:
             continue
         if not team_names_equivalent(home_name, odds_event["home_team"]):
             continue
+        metrics["home_pairs"] += 1
         if not team_names_equivalent(away_name, odds_event["away_team"]):
             continue
-        raw_date = str(event.get("date", "")).strip()
-        if raw_date:
-            try:
-                event_date = datetime.strptime(raw_date.replace("-", "/"), "%d/%m/%Y").date()
-            except ValueError:
-                continue
-            if abs((event_date - kickoff_date).days) > 1:
-                continue
+        metrics["full_identity_pairs"] += 1
         event_id = str(event.get("id", "")).strip()
         if event_id:
             matches.append(event_id)
-    if len(set(matches)) != 1:
+    return list(dict.fromkeys(matches)), metrics
+
+
+def _match_soccerdata_event(document: Any, odds_event: dict[str, Any]) -> str:
+    matches, _ = _soccerdata_candidate_metrics(_flatten_soccerdata_matches(document), odds_event)
+    if len(matches) != 1:
         raise ValueError("Soccerdata event match was missing or ambiguous")
     return matches[0]
 
@@ -260,18 +282,30 @@ def build_registration_sql_from_documents(
     if not candidates:
         raise ValueError("no upcoming Eliteserien event with odds was available")
     _soccerdata_league_id(soccerdata_leagues)
+    soccerdata_events = _flatten_soccerdata_matches(soccerdata_matches)
+    resolution_metrics = {
+        "odds_candidates": len(candidates),
+        "soccerdata_events": len(soccerdata_events),
+        "parseable_dates": sum(_soccerdata_event_date(event) is not None for event in soccerdata_events),
+        "date_pairs": 0,
+        "home_pairs": 0,
+        "full_identity_pairs": 0,
+        "ambiguous_candidates": 0,
+    }
     matched_fixture: tuple[dict[str, Any], str] | None = None
     for candidate in candidates:
-        try:
-            soccerdata_event_id = _match_soccerdata_event(soccerdata_matches, candidate)
-        except ValueError as error:
-            if str(error) != "Soccerdata event match was missing or ambiguous":
-                raise
+        matches, candidate_metrics = _soccerdata_candidate_metrics(soccerdata_events, candidate)
+        for key in ("date_pairs", "home_pairs", "full_identity_pairs"):
+            resolution_metrics[key] += candidate_metrics[key]
+        if len(matches) > 1:
+            resolution_metrics["ambiguous_candidates"] += 1
             continue
-        matched_fixture = (candidate, soccerdata_event_id)
+        if not matches:
+            continue
+        matched_fixture = (candidate, matches[0])
         break
     if matched_fixture is None:
-        raise ValueError("Soccerdata event match was missing or ambiguous")
+        raise FixtureResolutionError(resolution_metrics)
     odds_event, soccerdata_event_id = matched_fixture
 
     competition = "nor-eliteserien"
@@ -397,6 +431,17 @@ def main() -> int:
         discover(args.output)
     except Exception as error:
         print(f"discovery_status=review error_code={safe_failure_code(error)}")
+        if isinstance(error, FixtureResolutionError):
+            metric_order = (
+                "odds_candidates",
+                "soccerdata_events",
+                "parseable_dates",
+                "date_pairs",
+                "home_pairs",
+                "full_identity_pairs",
+                "ambiguous_candidates",
+            )
+            print("resolution_counts=" + ",".join(f"{key}:{error.metrics[key]}" for key in metric_order))
         print("credentials_logged=false payload_logged=false provider_ids_logged=false")
         return 2
     print("discovery_status=pass required_providers_matched=2 optional_provider_match_evaluated=true")
