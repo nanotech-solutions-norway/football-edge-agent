@@ -2,7 +2,11 @@ from datetime import datetime, timezone
 
 import pytest
 
-from scripts.discover_pip_fixture_registration import build_registration_sql_from_documents, safe_failure_code
+from scripts.discover_pip_fixture_registration import (
+    build_registration_sql_from_documents,
+    safe_failure_code,
+    team_names_equivalent,
+)
 
 
 NOW = datetime(2026, 8, 10, 12, 0, tzinfo=timezone.utc)
@@ -75,6 +79,53 @@ def test_skips_earlier_odds_only_event_and_selects_first_cross_provider_match():
     assert "'odds-api', 'odds-later'" in sql
     assert "'soccerdata-api', '531586'" in sql
     assert "2026-08-16 18:00:00.000000" in sql
+
+
+@pytest.mark.parametrize(
+    ("left", "right"),
+    [
+        ("SK Brann", "Brann"),
+        ("Molde FK", "Molde"),
+        ("Tromsø IL", "Tromso"),
+        ("Sarpsborg 08 FF", "Sarpsborg 08"),
+        ("Ham-Kam", "HamKam"),
+        ("KFUM", "KFUM Oslo"),
+    ],
+)
+def test_conservative_provider_team_identity_equivalence(left, right):
+    assert team_names_equivalent(left, right)
+
+
+@pytest.mark.parametrize(
+    ("left", "right"),
+    [
+        ("City", "Manchester City"),
+        ("United", "Manchester United"),
+        ("Viking", "Vikingur"),
+        ("Brann", "Bryne"),
+    ],
+)
+def test_provider_team_identity_rejects_unsafe_containment(left, right):
+    assert not team_names_equivalent(left, right)
+
+
+def test_club_designators_still_require_a_unique_home_away_date_match():
+    odds, leagues, matches = documents()
+    matches[0]["matches"] = [
+        {
+            "id": 531585,
+            "date": "15/08/2026",
+            "teams": {"home": {"name": "Bodø/Glimt FK"}, "away": {"name": "Vålerenga IF"}},
+        },
+        {
+            "id": 531586,
+            "date": "15/08/2026",
+            "teams": {"home": {"name": "Bodø/Glimt BK"}, "away": {"name": "Vålerenga IL"}},
+        },
+    ]
+
+    with pytest.raises(ValueError, match="missing or ambiguous"):
+        build_registration_sql_from_documents(odds, leagues, matches, fixture_code="JG8XWK5", now=NOW)
 
 
 def test_adds_unambiguous_optional_sports_game_odds_mapping():
