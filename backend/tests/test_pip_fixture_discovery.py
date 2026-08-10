@@ -233,6 +233,83 @@ def test_discovery_falls_back_to_dates_when_season_endpoint_is_unavailable(monke
     assert "'soccerdata-api', '531585'" in output.read_text(encoding="utf-8")
 
 
+def test_discovery_derives_calendar_season_when_season_endpoint_is_unavailable(monkeypatch, tmp_path):
+    odds, leagues, matches = documents()
+    calls: list[str] = []
+
+    def fake_get_json(url, headers=None):
+        calls.append(url)
+        if "api.the-odds-api.com" in url:
+            return odds
+        if "/country/" in url:
+            return {"results": [{"id": 20, "name": "Norway"}]}
+        if "/league/" in url:
+            return leagues
+        if "/season/" in url:
+            raise RuntimeError("upstream detail must remain private")
+        if "/matches/" in url:
+            query = parse_qs(urlparse(url).query)
+            return matches if query.get("season") == ["2026"] else []
+        raise AssertionError("unexpected provider URL")
+
+    monkeypatch.setenv("ODDS_API_KEY", "protected-odds-key")
+    monkeypatch.setenv("SOCCERDATA_API_KEY", "protected-soccerdata-key")
+    monkeypatch.setenv("PIP_VALIDATION_FIXTURE_CODE", "JG8XWK5")
+    monkeypatch.delenv("SPORTS_GAME_ODDS_KEY", raising=False)
+    monkeypatch.setattr(discovery_module, "_get_json", fake_get_json)
+    output = tmp_path / "registration.sql"
+
+    discovery_module.discover(output, now=NOW)
+
+    assert output.exists()
+    assert any("season=2026" in url for url in calls)
+    assert not any("date=" in url for url in calls)
+
+
+def test_date_fallback_continues_after_one_candidate_date_request_fails(monkeypatch, tmp_path):
+    odds, leagues, matches = documents()
+
+    def fake_get_json(url, headers=None):
+        if "api.the-odds-api.com" in url:
+            return odds
+        if "/country/" in url:
+            return {"results": [{"id": 20, "name": "Norway"}]}
+        if "/league/" in url:
+            return leagues
+        if "/season/" in url:
+            raise RuntimeError("upstream detail must remain private")
+        if "/matches/" in url:
+            query = parse_qs(urlparse(url).query)
+            if "season" in query:
+                return []
+            if query.get("date") == ["2026-08-15"]:
+                raise RuntimeError("no matches on candidate date")
+            return [
+                {
+                    "league_id": 777,
+                    "matches": [
+                        {
+                            "id": 531586,
+                            "date": "16/08/2026",
+                            "teams": {"home": {"name": "Vålerenga"}, "away": {"name": "Rosenborg"}},
+                        }
+                    ],
+                }
+            ]
+        raise AssertionError("unexpected provider URL")
+
+    monkeypatch.setenv("ODDS_API_KEY", "protected-odds-key")
+    monkeypatch.setenv("SOCCERDATA_API_KEY", "protected-soccerdata-key")
+    monkeypatch.setenv("PIP_VALIDATION_FIXTURE_CODE", "JG8XWK5")
+    monkeypatch.delenv("SPORTS_GAME_ODDS_KEY", raising=False)
+    monkeypatch.setattr(discovery_module, "_get_json", fake_get_json)
+    output = tmp_path / "registration.sql"
+
+    discovery_module.discover(output, now=NOW)
+
+    assert "'odds-api', 'odds-later'" in output.read_text(encoding="utf-8")
+
+
 def test_adds_unambiguous_optional_sports_game_odds_mapping():
     sports_game_odds = {
         "data": [
