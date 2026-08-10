@@ -1,9 +1,12 @@
 from datetime import datetime, timezone
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
+import scripts.discover_pip_fixture_registration as discovery_module
 from scripts.discover_pip_fixture_registration import (
     FixtureResolutionError,
+    _soccerdata_active_season,
     build_registration_sql_from_documents,
     safe_failure_code,
     team_names_equivalent,
@@ -150,6 +153,54 @@ def test_resolution_metrics_distinguish_unparseable_provider_dates():
     assert captured.value.metrics["date_pairs"] == 0
     assert captured.value.metrics["home_pairs"] == 0
     assert captured.value.metrics["full_identity_pairs"] == 0
+
+
+def test_active_soccerdata_season_is_unique_and_optional():
+    assert _soccerdata_active_season(
+        {"results": [{"year": "2026", "is_active": True}, {"year": "2025", "is_active": False}]}
+    ) == "2026"
+    assert _soccerdata_active_season({"results": [{"year": "2025", "is_active": False}]}) is None
+    with pytest.raises(ValueError, match="active season resolution was ambiguous"):
+        _soccerdata_active_season(
+            {"results": [{"year": "2026", "is_active": True}, {"year": "2026-2027", "is_active": True}]}
+        )
+
+
+def test_discovery_falls_back_to_candidate_dates_when_active_schedule_is_empty(monkeypatch, tmp_path):
+    odds, leagues, matches = documents()
+    calls: list[str] = []
+
+    def fake_get_json(url, headers=None):
+        calls.append(url)
+        if "api.the-odds-api.com" in url:
+            return odds
+        if "/country/" in url:
+            return {"results": [{"id": 20, "name": "Norway"}]}
+        if "/league/" in url:
+            return leagues
+        if "/season/" in url:
+            return {"results": [{"year": "2026", "is_active": True}]}
+        if "/matches/" in url:
+            query = parse_qs(urlparse(url).query)
+            if "season" in query:
+                return []
+            return matches if query.get("date") == ["2026-08-15"] else []
+        raise AssertionError("unexpected provider URL")
+
+    monkeypatch.setenv("ODDS_API_KEY", "protected-odds-key")
+    monkeypatch.setenv("SOCCERDATA_API_KEY", "protected-soccerdata-key")
+    monkeypatch.setenv("PIP_VALIDATION_FIXTURE_CODE", "JG8XWK5")
+    monkeypatch.delenv("SPORTS_GAME_ODDS_KEY", raising=False)
+    monkeypatch.setattr(discovery_module, "_get_json", fake_get_json)
+    output = tmp_path / "registration.sql"
+
+    discovery_module.discover(output, now=NOW)
+
+    assert output.exists()
+    assert any("/season/" in url for url in calls)
+    assert any("season=2026" in url for url in calls)
+    assert any("date=2026-08-15" in url for url in calls)
+    assert "'odds-api', 'odds-earliest'" in output.read_text(encoding="utf-8")
 
 
 def test_adds_unambiguous_optional_sports_game_odds_mapping():
