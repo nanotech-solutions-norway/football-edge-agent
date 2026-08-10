@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from scripts.discover_pip_fixture_registration import build_registration_sql_from_documents
+from scripts.discover_pip_fixture_registration import build_registration_sql_from_documents, safe_failure_code
 
 
 NOW = datetime(2026, 8, 10, 12, 0, tzinfo=timezone.utc)
@@ -79,3 +79,21 @@ def test_adds_unambiguous_optional_sports_game_odds_mapping():
         sports_game_odds_document=sports_game_odds,
     )
     assert "'sports-game-odds', 'sgo-event'" in sql
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("Soccerdata Norway country resolution was missing or ambiguous", "soccerdata_country_resolution"),
+        ("Soccerdata Eliteserien league resolution was missing or ambiguous", "soccerdata_league_resolution"),
+        ("Soccerdata event match was missing or ambiguous", "soccerdata_event_resolution"),
+        ("no upcoming Eliteserien event with odds was available", "odds_event_unavailable"),
+        ("protected fixture code is invalid", "fixture_code_invalid"),
+    ],
+)
+def test_safe_failure_codes_do_not_include_provider_payload(message, expected):
+    assert safe_failure_code(ValueError(message)) == expected
+
+
+def test_unknown_provider_failures_use_a_stable_sanitized_code():
+    assert safe_failure_code(RuntimeError("sensitive upstream detail")) == "unexpected_provider_response"
