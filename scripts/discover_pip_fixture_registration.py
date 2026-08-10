@@ -608,7 +608,13 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
     soccerdata_key = os.environ.get("SOCCERDATA_API_KEY", "")
     sports_game_odds_key = os.environ.get("SPORTS_GAME_ODDS_KEY", "")
     sportsdata_io_key = os.environ.get("SPORTSDATA_IO_KEY", "")
-    api_sports_key = os.environ.get("API_SPORTS_KEY", "")
+    api_sports_enabled = os.environ.get("API_SPORTS_ENABLED", "false").strip().casefold() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    api_sports_key = os.environ.get("API_SPORTS_KEY", "") if api_sports_enabled else ""
     fixture_code = os.environ.get("PIP_VALIDATION_FIXTURE_CODE", "")
     if not odds_key or not fixture_code or not (
         soccerdata_key or sports_game_odds_key or sportsdata_io_key or api_sports_key
@@ -713,7 +719,6 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
             sportsdata_io_document = None
 
     api_sports_document = None
-    api_sports_failure: ValueError | None = None
     if api_sports_key:
         api_sports_headers = {"Accept": "application/json", "x-apisports-key": api_sports_key}
         try:
@@ -806,17 +811,8 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
             }
             if not api_sports_document["response"]:
                 raise ValueError("API-Sports returned no Eliteserien fixtures for the requested season")
-        except ValueError as error:
-            api_sports_failure = error
+        except ValueError:
             api_sports_document = None
-
-    if (
-        api_sports_failure is not None
-        and sports_game_odds_document is None
-        and sportsdata_io_document is None
-        and not _flatten_soccerdata_matches(soccerdata_matches)
-    ):
-        raise api_sports_failure
 
     rendered = build_registration_sql_from_documents(
         odds_document,

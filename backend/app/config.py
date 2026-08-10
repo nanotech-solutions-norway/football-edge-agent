@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     auto_betting_require_risk_review: bool = True
 
     api_football_base_url: str = "https://v3.football.api-sports.io"
+    api_football_enabled: bool = False
     api_football_key: str = "replace_with_api_key"
     odds_api_base_url: str = "https://api.the-odds-api.com"
     odds_api_key: str = "replace_with_api_key"

@@ -18,16 +18,17 @@ class ProviderCapability:
 
 
 class ProviderClient:
-    def __init__(self, name: str, configured: bool, capability: ProviderCapability):
+    def __init__(self, name: str, configured: bool, capability: ProviderCapability, *, enabled: bool = True):
         self.name = name
         self.configured = configured
         self.capability = capability
+        self.enabled = enabled
 
     async def health_check(self) -> dict:
         return {
             "provider": self.name,
             "configured": self.configured,
-            "status": "configured" if self.configured else "missing_api_key",
+            "status": "disabled_policy" if not self.enabled else ("configured" if self.configured else "missing_api_key"),
             "capabilities": self.capability.__dict__,
         }
 
@@ -37,8 +38,11 @@ def get_provider_clients() -> dict[str, ProviderClient]:
     return {
         "api_football": ProviderClient(
             "api_football",
-            settings.api_football_key != "replace_with_api_key",
-            ProviderCapability("api_football", True, True, True, False, False, True, True, True, "candidate"),
+            settings.api_football_enabled and settings.api_football_key != "replace_with_api_key",
+            ProviderCapability(
+                "api_football", True, True, True, False, False, True, True, True, "disabled_current_tier"
+            ),
+            enabled=settings.api_football_enabled,
         ),
         "odds_api": ProviderClient(
             "odds_api",
