@@ -40,12 +40,12 @@
 
 | Data Domain | Provider Candidate | Status |
 |---|---|---|
-| Fixtures/results | API-FOOTBALL / Sportmonks | Pending credential validation |
-| Current odds | The Odds API / Sportmonks | Pending credential validation |
-| Historical odds | The Odds API / Sportmonks | Pending credential validation |
-| xG | Sportmonks / StatsBomb | Pending credential validation |
-| Lineups | API-FOOTBALL / Sportmonks | Pending credential validation |
-| Injuries/suspensions | API-FOOTBALL / Sportmonks | Pending credential validation |
+| Fixtures/results | API Sports (API-FOOTBALL) / SportsDataIO / Soccerdata API / SportsGameOdds | Pending credential validation |
+| Current odds | The Odds API / API Sports (API-FOOTBALL) / SportsDataIO / Soccerdata API / SportsGameOdds / SharpAPI | Pending credential validation |
+| Historical odds | The Odds API / SportsDataIO | Pending entitlement and depth validation |
+| xG | StatsBomb / selected licensed provider | Pending credential validation |
+| Lineups | API Sports (API-FOOTBALL) / SportsDataIO / Soccerdata API / SportsGameOdds | Pending credential validation |
+| Injuries/suspensions | API Sports (API-FOOTBALL) / SportsDataIO / Soccerdata API | Pending credential validation |
 | Provider timestamps/audit trail | All selected providers | Pending credential validation |
 
 ## 5. Open Items Before Phase 3
