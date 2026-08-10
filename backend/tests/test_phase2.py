@@ -67,8 +67,9 @@ def test_provider_catalog_includes_requested_candidates_without_sportmonks():
     assert providers["api_football"]["capabilities"]["current_odds"] is True
     assert providers["api_football"]["status"] == "disabled_policy"
     assert providers["api_football"]["capabilities"]["status"] == "disabled_current_tier"
+    assert providers["sportsdata_io"]["status"] == "disabled_policy"
+    assert providers["sportsdata_io"]["capabilities"]["status"] == "disabled_current_tier"
     assert all(providers[name]["status"] == "missing_api_key" for name in (
-        "sportsdata_io",
         "soccerdata_api",
         "sports_game_odds",
         "sharpapi",

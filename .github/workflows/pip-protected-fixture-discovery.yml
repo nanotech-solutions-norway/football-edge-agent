@@ -24,6 +24,7 @@ jobs:
       ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
       SOCCERDATA_API_KEY: ${{ secrets.SOCCERDATA_API_KEY }}
       SPORTS_GAME_ODDS_KEY: ${{ secrets.SPORTS_GAME_ODDS_KEY }}
+      SPORTSDATA_IO_ENABLED: false
       SPORTSDATA_IO_KEY: ${{ secrets.SPORTSDATA_IO_KEY }}
       API_SPORTS_ENABLED: false
       API_SPORTS_KEY: ${{ secrets.API_SPORTS_KEY }}
