@@ -723,9 +723,22 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                     }
                 )
                 try:
-                    fixture_documents.append(
-                        _get_json(f"https://v3.football.api-sports.io/fixtures?{fixture_query}", api_sports_headers)
+                    fixture_document = _get_json(
+                        f"https://v3.football.api-sports.io/fixtures?{fixture_query}", api_sports_headers
                     )
+                    if not (
+                        isinstance(fixture_document, dict)
+                        and isinstance(fixture_document.get("response"), list)
+                        and fixture_document["response"]
+                    ):
+                        season_query = urllib.parse.urlencode(
+                            {"league": league_id, "season": candidate_year}
+                        )
+                        fixture_document = _get_json(
+                            f"https://v3.football.api-sports.io/fixtures?{season_query}",
+                            api_sports_headers,
+                        )
+                    fixture_documents.append(fixture_document)
                 except urllib.error.HTTPError as error:
                     if error.code in {401, 403}:
                         raise ValueError("API-Sports authentication or competition access failed") from None
@@ -742,30 +755,6 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                     if isinstance(document, dict) and isinstance(event, dict)
                 ]
             }
-            if not api_sports_document["response"]:
-                fixture_documents = []
-                for candidate_date in sorted({event["_kickoff"].date() for event in odds_candidates}):
-                    candidate_year = candidate_date.year
-                    league_query = urllib.parse.urlencode({"country": "Norway"})
-                    leagues = _get_json(
-                        f"https://v3.football.api-sports.io/leagues?{league_query}",
-                        api_sports_headers,
-                    )
-                    league_id = _api_sports_league_id(leagues, candidate_year)
-                    fixture_query = urllib.parse.urlencode(
-                        {"league": league_id, "season": candidate_year, "date": candidate_date.isoformat()}
-                    )
-                    fixture_documents.append(
-                        _get_json(f"https://v3.football.api-sports.io/fixtures?{fixture_query}", api_sports_headers)
-                    )
-                api_sports_document = {
-                    "response": [
-                        event
-                        for document in fixture_documents
-                        for event in document.get("response", [])
-                        if isinstance(document, dict) and isinstance(event, dict)
-                    ]
-                }
         except ValueError as error:
             api_sports_failure = error
             api_sports_document = None

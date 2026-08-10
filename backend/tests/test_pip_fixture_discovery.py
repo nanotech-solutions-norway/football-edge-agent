@@ -465,6 +465,53 @@ def test_api_sports_can_be_the_required_secondary_provider():
     assert "'soccerdata-api'" not in sql
 
 
+def test_discovery_falls_back_to_api_sports_full_season_schedule(monkeypatch, tmp_path):
+    odds, _, _ = documents()
+    calls: list[str] = []
+
+    def fake_get_json(url, headers=None):
+        calls.append(url)
+        if "api.the-odds-api.com" in url:
+            return odds
+        if "/leagues?" in url:
+            return {
+                "response": [
+                    {
+                        "league": {"id": 103, "name": "Eliteserien"},
+                        "country": {"name": "Norway"},
+                        "seasons": [{"year": 2026}],
+                    }
+                ]
+            }
+        if "/fixtures?" in url:
+            query = parse_qs(urlparse(url).query)
+            if "from" in query:
+                return {"response": []}
+            return {
+                "response": [
+                    {
+                        "fixture": {"id": 991122, "date": "2026-08-15T18:00:00+00:00"},
+                        "teams": {"home": {"name": "Bodø/Glimt"}, "away": {"name": "Vålerenga"}},
+                    }
+                ]
+            }
+        raise AssertionError("unexpected provider URL")
+
+    monkeypatch.setenv("ODDS_API_KEY", "protected-odds-key")
+    monkeypatch.setenv("API_SPORTS_KEY", "protected-api-sports-key")
+    monkeypatch.setenv("PIP_VALIDATION_FIXTURE_CODE", "JG8XWK5")
+    for name in ("SOCCERDATA_API_KEY", "SPORTS_GAME_ODDS_KEY", "SPORTSDATA_IO_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(discovery_module, "_get_json", fake_get_json)
+    output = tmp_path / "registration.sql"
+
+    discovery_module.discover(output, now=NOW)
+
+    assert any("from=" in url and "to=" in url for url in calls if "/fixtures?" in url)
+    assert any("season=2026" in url and "from=" not in url for url in calls if "/fixtures?" in url)
+    assert "'api-sports', '991122'" in output.read_text(encoding="utf-8")
+
+
 def test_discovery_continues_to_sports_game_odds_when_soccerdata_schedule_fails(monkeypatch, tmp_path):
     odds, leagues, _ = documents()
 
