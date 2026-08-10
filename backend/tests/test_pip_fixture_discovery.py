@@ -7,6 +7,7 @@ import scripts.discover_pip_fixture_registration as discovery_module
 from scripts.discover_pip_fixture_registration import (
     FixtureResolutionError,
     _api_sports_league_id,
+    _api_sports_response_failure,
     _soccerdata_active_season,
     build_registration_sql_from_documents,
     safe_failure_code,
@@ -194,6 +195,18 @@ def test_api_sports_league_is_resolved_from_country_catalog_and_requested_season
     }
 
     assert _api_sports_league_id(leagues, 2026) == "103"
+
+
+def test_api_sports_provider_errors_are_classified_without_values():
+    restriction = _api_sports_response_failure(
+        {"errors": {"plan": "sensitive upstream detail"}}, fixture_request=True
+    )
+    quota = _api_sports_response_failure(
+        {"errors": {"requests": "sensitive upstream detail"}}, fixture_request=True
+    )
+
+    assert str(restriction) == "API-Sports fixture response reported a provider restriction"
+    assert str(quota) == "API-Sports request quota was exceeded"
 
 
 def test_discovery_falls_back_to_candidate_dates_when_active_schedule_is_empty(monkeypatch, tmp_path):
@@ -562,6 +575,8 @@ def test_discovery_continues_to_sports_game_odds_when_soccerdata_schedule_fails(
         ("API-Sports league request failed", "api_sports_league_request"),
         ("API-Sports league response could not resolve Eliteserien", "api_sports_league_resolution"),
         ("API-Sports fixture request failed", "api_sports_fixture_request"),
+        ("API-Sports fixture response reported a provider restriction", "api_sports_fixture_restricted"),
+        ("API-Sports returned no Eliteserien fixtures for the requested season", "api_sports_empty_season"),
         ("no upcoming Eliteserien event with odds was available", "odds_event_unavailable"),
         ("protected fixture code is invalid", "fixture_code_invalid"),
     ],
