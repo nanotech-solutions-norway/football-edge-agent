@@ -60,6 +60,23 @@ def test_discovery_fails_closed_without_cross_provider_match():
         build_registration_sql_from_documents(odds, leagues, matches, fixture_code="JG8XWK5", now=NOW)
 
 
+def test_skips_earlier_odds_only_event_and_selects_first_cross_provider_match():
+    odds, leagues, matches = documents()
+    matches[0]["matches"] = [
+        {
+            "id": 531586,
+            "date": "16/08/2026",
+            "teams": {"home": {"name": "Vålerenga"}, "away": {"name": "Rosenborg"}},
+        }
+    ]
+
+    sql = build_registration_sql_from_documents(odds, leagues, matches, fixture_code="JG8XWK5", now=NOW)
+
+    assert "'odds-api', 'odds-later'" in sql
+    assert "'soccerdata-api', '531586'" in sql
+    assert "2026-08-16 18:00:00.000000" in sql
+
+
 def test_adds_unambiguous_optional_sports_game_odds_mapping():
     sports_game_odds = {
         "data": [
