@@ -32,6 +32,7 @@ SAFE_FAILURE_CODES = {
     "Soccerdata Norway country resolution was missing or ambiguous": "soccerdata_country_resolution",
     "Soccerdata event match was missing or ambiguous": "soccerdata_event_resolution",
     "Soccerdata active season resolution was ambiguous": "soccerdata_season_resolution",
+    "Soccerdata date schedule request failed": "soccerdata_date_schedule_request",
     "protected fixture code is invalid": "fixture_code_invalid",
     "no upcoming Eliteserien event with odds was available": "odds_event_unavailable",
     "provider returned non-200 response": "provider_http_status",
@@ -419,8 +420,11 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
     soccerdata_leagues = _get_json(f"https://api.soccerdataapi.com/league/?{league_query}", soccer_headers)
     league_id = _soccerdata_league_id(soccerdata_leagues)
     season_query = urllib.parse.urlencode({"league_id": league_id, "auth_token": soccerdata_key})
-    soccerdata_seasons = _get_json(f"https://api.soccerdataapi.com/season/?{season_query}", soccer_headers)
-    active_season = _soccerdata_active_season(soccerdata_seasons)
+    try:
+        soccerdata_seasons = _get_json(f"https://api.soccerdataapi.com/season/?{season_query}", soccer_headers)
+        active_season = _soccerdata_active_season(soccerdata_seasons)
+    except Exception:
+        active_season = None
     match_documents: list[Any] = []
     if active_season is not None:
         matches_query = urllib.parse.urlencode(
@@ -437,9 +441,12 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
             date_query = urllib.parse.urlencode(
                 {"league_id": league_id, "date": candidate_date, "auth_token": soccerdata_key}
             )
-            match_documents.append(
-                _get_json(f"https://api.soccerdataapi.com/matches/?{date_query}", soccer_headers)
-            )
+            try:
+                match_documents.append(
+                    _get_json(f"https://api.soccerdataapi.com/matches/?{date_query}", soccer_headers)
+                )
+            except Exception as error:
+                raise ValueError("Soccerdata date schedule request failed") from error
     soccerdata_matches = _merge_soccerdata_match_documents(match_documents)
 
     sports_game_odds_document = None
