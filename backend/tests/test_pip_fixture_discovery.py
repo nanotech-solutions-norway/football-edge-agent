@@ -142,6 +142,8 @@ def test_club_designators_still_require_a_unique_home_away_date_match():
         "sports_game_odds_matches": 0,
         "sportsdata_io_available": 0,
         "sportsdata_io_matches": 0,
+        "api_sports_available": 0,
+        "api_sports_matches": 0,
     }
 
 
@@ -412,6 +414,31 @@ def test_sportsdata_io_ambiguous_identity_fails_closed():
             now=NOW,
             sportsdata_io_document=sportsdata_schedule,
         )
+
+
+def test_api_sports_can_be_the_required_secondary_provider():
+    odds, _, _ = documents()
+    api_sports = {
+        "response": [
+            {
+                "fixture": {"id": 991122, "date": "2026-08-15T18:00:00+00:00"},
+                "teams": {"home": {"name": "Bodø/Glimt"}, "away": {"name": "Vålerenga"}},
+            }
+        ]
+    }
+
+    sql = build_registration_sql_from_documents(
+        odds,
+        None,
+        None,
+        fixture_code="JG8XWK5",
+        now=NOW,
+        api_sports_document=api_sports,
+    )
+
+    assert "'odds-api', 'odds-earliest'" in sql
+    assert "'api-sports', '991122'" in sql
+    assert "'soccerdata-api'" not in sql
 
 
 def test_discovery_continues_to_sports_game_odds_when_soccerdata_schedule_fails(monkeypatch, tmp_path):
