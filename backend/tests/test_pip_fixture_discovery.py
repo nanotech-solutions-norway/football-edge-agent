@@ -478,7 +478,7 @@ def test_api_sports_can_be_the_required_secondary_provider():
     assert "'soccerdata-api'" not in sql
 
 
-def test_discovery_falls_back_to_api_sports_full_season_schedule(monkeypatch, tmp_path):
+def test_discovery_falls_back_to_api_sports_scheduled_fixture_query(monkeypatch, tmp_path):
     odds, _, _ = documents()
     calls: list[str] = []
 
@@ -522,7 +522,7 @@ def test_discovery_falls_back_to_api_sports_full_season_schedule(monkeypatch, tm
 
     assert any("from=" in url and "to=" in url for url in calls if "/fixtures?" in url)
     assert any(
-        "season=2026" in url and "next=50" in url and "from=" not in url
+        "season=2026" in url and "status=NS" in url and "from=" not in url
         for url in calls
         if "/fixtures?" in url
     )

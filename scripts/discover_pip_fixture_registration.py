@@ -754,7 +754,7 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                         and fixture_document["response"]
                     ):
                         season_query = urllib.parse.urlencode(
-                            {"league": league_id, "season": candidate_year, "next": 50}
+                            {"league": league_id, "season": candidate_year, "status": "NS"}
                         )
                         fixture_document = _get_json(
                             f"https://v3.football.api-sports.io/fixtures?{season_query}",
