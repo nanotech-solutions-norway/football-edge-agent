@@ -232,9 +232,20 @@ def build_registration_sql_from_documents(
     candidates = _odds_candidates(odds_document, now)
     if not candidates:
         raise ValueError("no upcoming Eliteserien event with odds was available")
-    odds_event = candidates[0]
     _soccerdata_league_id(soccerdata_leagues)
-    soccerdata_event_id = _match_soccerdata_event(soccerdata_matches, odds_event)
+    matched_fixture: tuple[dict[str, Any], str] | None = None
+    for candidate in candidates:
+        try:
+            soccerdata_event_id = _match_soccerdata_event(soccerdata_matches, candidate)
+        except ValueError as error:
+            if str(error) != "Soccerdata event match was missing or ambiguous":
+                raise
+            continue
+        matched_fixture = (candidate, soccerdata_event_id)
+        break
+    if matched_fixture is None:
+        raise ValueError("Soccerdata event match was missing or ambiguous")
+    odds_event, soccerdata_event_id = matched_fixture
 
     competition = "nor-eliteserien"
     kickoff = odds_event["_kickoff"]
