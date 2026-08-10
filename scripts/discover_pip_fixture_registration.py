@@ -40,6 +40,8 @@ SAFE_FAILURE_CODES = {
     "API-Sports league request failed": "api_sports_league_request",
     "API-Sports league response could not resolve Eliteserien": "api_sports_league_resolution",
     "API-Sports fixture request failed": "api_sports_fixture_request",
+    "API-Sports plan does not permit fixture access": "api_sports_plan_restricted",
+    "API-Sports fixture query parameters were rejected": "api_sports_parameters_rejected",
     "API-Sports fixture response reported a provider restriction": "api_sports_fixture_restricted",
     "API-Sports returned no Eliteserien fixtures for the requested season": "api_sports_empty_season",
     "protected fixture code is invalid": "fixture_code_invalid",
@@ -413,6 +415,10 @@ def _api_sports_response_failure(document: Any, *, fixture_request: bool) -> Val
     ):
         return ValueError("API-Sports request quota was exceeded")
     if fixture_request:
+        if normalized_keys.intersection({"plan", "subscription"}):
+            return ValueError("API-Sports plan does not permit fixture access")
+        if normalized_keys.intersection({"parameter", "parameters"}):
+            return ValueError("API-Sports fixture query parameters were rejected")
         return ValueError("API-Sports fixture response reported a provider restriction")
     return ValueError("API-Sports league request failed")
 
