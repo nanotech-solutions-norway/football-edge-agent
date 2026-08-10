@@ -51,8 +51,11 @@ def get_provider_clients() -> dict[str, ProviderClient]:
         ),
         "sportsdata_io": ProviderClient(
             "sportsdata_io",
-            settings.sportsdata_io_key != "replace_with_api_key",
-            ProviderCapability("sportsdata_io", True, True, True, True, False, True, True, True, "candidate"),
+            settings.sportsdata_io_enabled and settings.sportsdata_io_key != "replace_with_api_key",
+            ProviderCapability(
+                "sportsdata_io", True, True, True, True, False, True, True, True, "disabled_current_tier"
+            ),
+            enabled=settings.sportsdata_io_enabled,
         ),
         "soccerdata_api": ProviderClient(
             "soccerdata_api",
