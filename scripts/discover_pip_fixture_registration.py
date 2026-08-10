@@ -412,6 +412,7 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
     odds_document = _get_json(
         f"https://api.the-odds-api.com/v4/sports/soccer_norway_eliteserien/odds?{odds_query}"
     )
+    odds_candidates = _odds_candidates(odds_document, reference_time)
     soccer_headers = {"Accept": "application/json", "Accept-Encoding": "gzip"}
     country_query = urllib.parse.urlencode({"auth_token": soccerdata_key})
     soccerdata_countries = _get_json(f"https://api.soccerdataapi.com/country/?{country_query}", soccer_headers)
@@ -433,10 +434,23 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
         match_documents.append(
             _get_json(f"https://api.soccerdataapi.com/matches/?{matches_query}", soccer_headers)
         )
+    else:
+        candidate_seasons = sorted({str(event["_kickoff"].year) for event in odds_candidates})[:2]
+        for candidate_season in candidate_seasons:
+            matches_query = urllib.parse.urlencode(
+                {"league_id": league_id, "season": candidate_season, "auth_token": soccerdata_key}
+            )
+            try:
+                match_documents.append(
+                    _get_json(f"https://api.soccerdataapi.com/matches/?{matches_query}", soccer_headers)
+                )
+            except Exception:
+                continue
     if not _merge_soccerdata_match_documents(match_documents)[0]["matches"]:
         candidate_dates = sorted(
-            {event["_kickoff"].date().isoformat() for event in _odds_candidates(odds_document, reference_time)}
+            {event["_kickoff"].date().isoformat() for event in odds_candidates}
         )[:14]
+        successful_date_requests = 0
         for candidate_date in candidate_dates:
             date_query = urllib.parse.urlencode(
                 {"league_id": league_id, "date": candidate_date, "auth_token": soccerdata_key}
@@ -445,8 +459,11 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                 match_documents.append(
                     _get_json(f"https://api.soccerdataapi.com/matches/?{date_query}", soccer_headers)
                 )
-            except Exception as error:
-                raise ValueError("Soccerdata date schedule request failed") from error
+                successful_date_requests += 1
+            except Exception:
+                continue
+        if successful_date_requests == 0:
+            raise ValueError("Soccerdata date schedule request failed")
     soccerdata_matches = _merge_soccerdata_match_documents(match_documents)
 
     sports_game_odds_document = None
