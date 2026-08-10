@@ -205,7 +205,7 @@ def test_api_sports_provider_errors_are_classified_without_values():
         {"errors": {"requests": "sensitive upstream detail"}}, fixture_request=True
     )
 
-    assert str(restriction) == "API-Sports fixture response reported a provider restriction"
+    assert str(restriction) == "API-Sports plan does not permit fixture access"
     assert str(quota) == "API-Sports request quota was exceeded"
 
 
@@ -558,7 +558,7 @@ def test_discovery_preserves_api_sports_fixture_restriction_classification(monke
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(discovery_module, "_get_json", fake_get_json)
 
-    with pytest.raises(ValueError, match="API-Sports fixture response reported a provider restriction"):
+    with pytest.raises(ValueError, match="API-Sports plan does not permit fixture access"):
         discovery_module.discover(tmp_path / "registration.sql", now=NOW)
 
 
@@ -612,6 +612,8 @@ def test_discovery_continues_to_sports_game_odds_when_soccerdata_schedule_fails(
         ("API-Sports league request failed", "api_sports_league_request"),
         ("API-Sports league response could not resolve Eliteserien", "api_sports_league_resolution"),
         ("API-Sports fixture request failed", "api_sports_fixture_request"),
+        ("API-Sports plan does not permit fixture access", "api_sports_plan_restricted"),
+        ("API-Sports fixture query parameters were rejected", "api_sports_parameters_rejected"),
         ("API-Sports fixture response reported a provider restriction", "api_sports_fixture_restricted"),
         ("API-Sports returned no Eliteserien fixtures for the requested season", "api_sports_empty_season"),
         ("no upcoming Eliteserien event with odds was available", "odds_event_unavailable"),
