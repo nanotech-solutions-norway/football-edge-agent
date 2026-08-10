@@ -10,8 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PYTHONPATH: ${{ github.workspace }}
-      FEA_PIP_CONTRACT_SHA256: a2fa4bda60c4742ea353024f2e4d4bcd854345a1e6185d892c5a40c282958349
-      R0_SYNTHETIC_PAYLOAD_SHA256: 62c1bd6a79aad6203fc68f889fbf7edceeb720a895b15d764c7d6968bbcf8817
+      FEA_PIP_CONTRACT_SHA256: da9e1ffe9ab0044f4ce94e0d03f56b2df8bd7c89cf890b798dd34b23055b9749
+      R0_SYNTHETIC_PAYLOAD_SHA256: 6a1454f8262462bcdbcf98a26b1e3153849f46f784eff2d84c378f8ce6193e8c
     steps:
       - name: Checkout
         uses: actions/checkout@v4

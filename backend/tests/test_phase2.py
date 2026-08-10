@@ -28,13 +28,19 @@ def test_auto_betting_execute_blocked():
 
 
 def test_data_quality_requires_historical_odds_and_xg():
-    response = client.get("/data-quality/1")
+    response = client.get("/data-quality/7K4M2QF")
     assert response.status_code == 200
     payload = response.json()["data"]
     fields = {item["field"] for item in payload["checks"]}
     assert "historical_odds" in fields
     assert "xg" in fields
     assert payload["overall_status"] == "NO_BET_UNTIL_PROVIDER_DATA_VALIDATED"
+
+
+def test_fixture_routes_reject_numeric_or_ambiguous_public_codes():
+    for fixture_code in ("1234567", "ABCDEFG", "12O4ABC"):
+        response = client.get(f"/fixtures/{fixture_code}")
+        assert response.status_code == 422
 
 
 def test_supported_competitions_include_eliteserien_only_code():

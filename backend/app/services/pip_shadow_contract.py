@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from math import isclose
+import re
 from typing import Any
 
 CONTRACT_VERSION = "2.0.0"
@@ -21,6 +22,7 @@ MARKET_SELECTIONS: dict[str, tuple[str, ...]] = {
 ALLOWED_STATUS = {"ok", "degraded", "insufficient_data"}
 ALLOWED_CONSENSUS_STATUS = {"comparable_consensus", "market_only", "insufficient_consensus"}
 ALLOWED_AUDIT_SOURCE = {"shadow", "internal_live", "backtest", "mock"}
+FIXTURE_CODE_PATTERN = re.compile(r"^(?=.*[0-9])(?=.*[A-HJ-KM-NP-TV-Z])[0-9A-HJ-KM-NP-TV-Z]{7}$")
 
 
 @dataclass(frozen=True)
@@ -55,7 +57,7 @@ def validate_shadow_payload(
         return ShadowContractValidation(False, ("payload_must_be_object",))
 
     required = {
-        "status", "contract_version", "platform", "fixture_id", "sport", "market",
+        "status", "contract_version", "platform", "fixture_code", "sport", "market",
         "generated_at", "probabilities", "data_quality", "safety", "audit",
     }
     missing = sorted(required - set(payload))
@@ -70,9 +72,9 @@ def validate_shadow_payload(
         errors.append("sport_mismatch")
     if payload.get("status") not in ALLOWED_STATUS:
         errors.append("invalid_status")
-    fixture_id = payload.get("fixture_id")
-    if not isinstance(fixture_id, int) or isinstance(fixture_id, bool) or fixture_id < 1:
-        errors.append("invalid_fixture_id")
+    fixture_code = payload.get("fixture_code")
+    if not isinstance(fixture_code, str) or FIXTURE_CODE_PATTERN.fullmatch(fixture_code) is None:
+        errors.append("invalid_fixture_code")
 
     market = payload.get("market")
     if market not in MARKET_SELECTIONS:

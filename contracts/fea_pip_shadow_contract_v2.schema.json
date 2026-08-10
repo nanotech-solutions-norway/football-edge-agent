@@ -8,7 +8,7 @@
     "status",
     "contract_version",
     "platform",
-    "fixture_id",
+    "fixture_code",
     "sport",
     "market",
     "generated_at",
@@ -34,9 +34,9 @@
       "type": "string",
       "const": "atlas_probability_intelligence_platform"
     },
-    "fixture_id": {
-      "type": "integer",
-      "minimum": 1
+    "fixture_code": {
+      "type": "string",
+      "pattern": "^(?=.*[0-9])(?=.*[A-HJ-KM-NP-TV-Z])[0-9A-HJ-KM-NP-TV-Z]{7}$"
     },
     "sport": {
       "type": "string",

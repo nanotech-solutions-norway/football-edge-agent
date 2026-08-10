@@ -28,10 +28,10 @@ python scripts/validate_phase2.py
 | `GET /health` | `status=success`, `default_recommendation=NO BET` |
 | `GET /providers/status` | Candidate provider capability payload |
 | `GET /fixtures/upcoming` | Placeholder response with supported competitions |
-| `GET /odds/current/{fixture_id}` | Placeholder current odds payload |
-| `GET /odds/history/{fixture_id}` | Placeholder historical odds payload, mandatory true |
-| `GET /xg/{fixture_id}` | Placeholder xG payload, mandatory true |
-| `GET /data-quality/{fixture_id}` | Mandatory-data checklist with `NO_BET_UNTIL_PROVIDER_DATA_VALIDATED` |
+| `GET /odds/current/{fixture_code}` | Placeholder current odds payload |
+| `GET /odds/history/{fixture_code}` | Placeholder historical odds payload, mandatory true |
+| `GET /xg/{fixture_code}` | Placeholder xG payload, mandatory true |
+| `GET /data-quality/{fixture_code}` | Mandatory-data checklist with `NO_BET_UNTIL_PROVIDER_DATA_VALIDATED` |
 | `GET /auto-betting/status` | `enabled=false`, `hard_locked=true` |
 | `POST /auto-betting/execute` | HTTP 403 while hard-lock is active |
 
