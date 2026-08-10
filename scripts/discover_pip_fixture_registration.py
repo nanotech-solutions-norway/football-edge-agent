@@ -753,16 +753,32 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                         and isinstance(fixture_document.get("response"), list)
                         and fixture_document["response"]
                     ):
-                        season_query = urllib.parse.urlencode(
-                            {"league": league_id, "season": candidate_year, "status": "NS"}
-                        )
-                        fixture_document = _get_json(
-                            f"https://v3.football.api-sports.io/fixtures?{season_query}",
-                            api_sports_headers,
-                        )
-                        response_failure = _api_sports_response_failure(fixture_document, fixture_request=True)
-                        if response_failure is not None:
-                            raise response_failure
+                        date_documents: list[dict[str, Any]] = []
+                        for candidate_date in sorted(set(dates))[:14]:
+                            date_query = urllib.parse.urlencode(
+                                {
+                                    "league": league_id,
+                                    "season": candidate_year,
+                                    "date": candidate_date.isoformat(),
+                                }
+                            )
+                            date_document = _get_json(
+                                f"https://v3.football.api-sports.io/fixtures?{date_query}",
+                                api_sports_headers,
+                            )
+                            response_failure = _api_sports_response_failure(date_document, fixture_request=True)
+                            if response_failure is not None:
+                                raise response_failure
+                            if isinstance(date_document, dict):
+                                date_documents.append(date_document)
+                        fixture_document = {
+                            "response": [
+                                event
+                                for document in date_documents
+                                for event in document.get("response", [])
+                                if isinstance(document.get("response"), list) and isinstance(event, dict)
+                            ]
+                        }
                     fixture_documents.append(fixture_document)
                 except urllib.error.HTTPError as error:
                     if error.code in {401, 403}:

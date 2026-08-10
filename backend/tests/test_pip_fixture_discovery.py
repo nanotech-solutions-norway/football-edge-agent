@@ -478,7 +478,7 @@ def test_api_sports_can_be_the_required_secondary_provider():
     assert "'soccerdata-api'" not in sql
 
 
-def test_discovery_falls_back_to_api_sports_scheduled_fixture_query(monkeypatch, tmp_path):
+def test_discovery_falls_back_to_api_sports_candidate_date_query(monkeypatch, tmp_path):
     odds, _, _ = documents()
     calls: list[str] = []
 
@@ -499,6 +499,8 @@ def test_discovery_falls_back_to_api_sports_scheduled_fixture_query(monkeypatch,
         if "/fixtures?" in url:
             query = parse_qs(urlparse(url).query)
             if "from" in query:
+                return {"response": []}
+            if query.get("date") != ["2026-08-15"]:
                 return {"response": []}
             return {
                 "response": [
@@ -522,7 +524,7 @@ def test_discovery_falls_back_to_api_sports_scheduled_fixture_query(monkeypatch,
 
     assert any("from=" in url and "to=" in url for url in calls if "/fixtures?" in url)
     assert any(
-        "season=2026" in url and "status=NS" in url and "from=" not in url
+        "season=2026" in url and "date=2026-08-15" in url and "from=" not in url
         for url in calls
         if "/fixtures?" in url
     )
