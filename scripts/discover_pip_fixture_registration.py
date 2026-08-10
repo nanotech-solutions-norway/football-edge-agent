@@ -770,6 +770,8 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                     if error.code == 429:
                         raise ValueError("API-Sports request quota was exceeded") from None
                     raise ValueError("API-Sports fixture request failed") from None
+                except ValueError:
+                    raise
                 except Exception:
                     raise ValueError("API-Sports fixture request failed") from None
             api_sports_document = {
