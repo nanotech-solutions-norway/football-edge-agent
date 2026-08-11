@@ -37,7 +37,7 @@ jobs:
         run: python scripts/discover_pip_fixture_registration.py --output "${RUNNER_TEMP}/pip-fixture-registration.sql"
 
       - name: Upload protected registration SQL
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pip-fixture-registration-sql
           path: ${{ runner.temp }}/pip-fixture-registration.sql
