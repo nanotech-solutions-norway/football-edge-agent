@@ -10,6 +10,7 @@ from scripts.discover_pip_fixture_registration import (
     _api_sports_league_id,
     _api_sports_response_failure,
     _soccerdata_active_season,
+    _soccerdata_response_failure,
     build_registration_sql_from_documents,
     safe_failure_code,
     team_names_equivalent,
@@ -177,6 +178,16 @@ def test_active_soccerdata_season_is_unique_and_optional():
         _soccerdata_active_season(
             {"results": [{"year": "2026", "is_active": True}, {"year": "2026-2027", "is_active": True}]}
         )
+
+
+def test_soccerdata_http_200_errors_are_classified_without_detail_values():
+    auth = _soccerdata_response_failure({"detail": "Invalid token with sensitive value"})
+    quota = _soccerdata_response_failure({"detail": "Request was throttled. Expected available later."})
+    provider = _soccerdata_response_failure({"detail": "Sensitive upstream provider error"})
+
+    assert str(auth) == "Soccerdata authentication or competition access failed"
+    assert str(quota) == "Soccerdata request quota was exceeded"
+    assert str(provider) == "Soccerdata response reported a provider error"
 
 
 def test_api_sports_league_is_resolved_from_country_catalog_and_requested_season():
