@@ -34,6 +34,9 @@ SAFE_FAILURE_CODES = {
     "Soccerdata event match was missing or ambiguous": "soccerdata_event_resolution",
     "Soccerdata active season resolution was ambiguous": "soccerdata_season_resolution",
     "Soccerdata date schedule request failed": "soccerdata_date_schedule_request",
+    "Soccerdata authentication or competition access failed": "soccerdata_auth_or_access",
+    "Soccerdata request quota was exceeded": "soccerdata_quota",
+    "Soccerdata response reported a provider error": "soccerdata_provider_error",
     "secondary provider event match was missing or ambiguous": "secondary_provider_resolution",
     "API-Sports authentication or competition access failed": "api_sports_auth_or_access",
     "API-Sports request quota was exceeded": "api_sports_quota",
@@ -80,6 +83,10 @@ def _provider_failure_code(error: Exception) -> str:
     if isinstance(error, urllib.error.URLError):
         return "transport_error"
     local_code = safe_failure_code(error)
+    if local_code == "soccerdata_auth_or_access":
+        return "auth_or_access"
+    if local_code == "soccerdata_quota":
+        return "quota"
     if local_code in {"provider_response_size", "provider_decompressed_size", "provider_http_status"}:
         return local_code
     return "request_or_response_invalid"
@@ -209,6 +216,26 @@ def _soccerdata_active_season(document: Any) -> str | None:
     if len(active) > 1:
         raise ValueError("Soccerdata active season resolution was ambiguous")
     return active[0] if active else None
+
+
+def _soccerdata_response_failure(document: Any) -> ValueError | None:
+    detail = document.get("detail") if isinstance(document, dict) else None
+    if not isinstance(detail, str) or not detail.strip():
+        return None
+    normalized = detail.casefold()
+    if any(marker in normalized for marker in ("token", "authentication", "permission", "access")):
+        return ValueError("Soccerdata authentication or competition access failed")
+    if any(marker in normalized for marker in ("throttl", "rate limit", "quota")):
+        return ValueError("Soccerdata request quota was exceeded")
+    return ValueError("Soccerdata response reported a provider error")
+
+
+def _get_soccerdata_json(url: str, headers: dict[str, str]) -> Any:
+    document = _get_json(url, headers)
+    response_failure = _soccerdata_response_failure(document)
+    if response_failure is not None:
+        raise response_failure
+    return document
 
 
 def _flatten_soccerdata_matches(document: Any) -> list[dict[str, Any]]:
@@ -663,15 +690,23 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
         try:
             soccer_headers = {"Accept": "application/json", "Accept-Encoding": "gzip"}
             country_query = urllib.parse.urlencode({"auth_token": soccerdata_key})
-            soccerdata_countries = _get_json(f"https://api.soccerdataapi.com/country/?{country_query}", soccer_headers)
+            soccerdata_countries = _get_soccerdata_json(
+                f"https://api.soccerdataapi.com/country/?{country_query}", soccer_headers
+            )
             country_id = _soccerdata_country_id(soccerdata_countries)
             league_query = urllib.parse.urlencode({"country_id": country_id, "auth_token": soccerdata_key})
-            soccerdata_leagues = _get_json(f"https://api.soccerdataapi.com/league/?{league_query}", soccer_headers)
+            soccerdata_leagues = _get_soccerdata_json(
+                f"https://api.soccerdataapi.com/league/?{league_query}", soccer_headers
+            )
             league_id = _soccerdata_league_id(soccerdata_leagues)
             season_query = urllib.parse.urlencode({"league_id": league_id, "auth_token": soccerdata_key})
             try:
-                soccerdata_seasons = _get_json(f"https://api.soccerdataapi.com/season/?{season_query}", soccer_headers)
+                soccerdata_seasons = _get_soccerdata_json(
+                    f"https://api.soccerdataapi.com/season/?{season_query}", soccer_headers
+                )
                 active_season = _soccerdata_active_season(soccerdata_seasons)
+            except ValueError:
+                raise
             except Exception:
                 active_season = None
             match_documents: list[Any] = []
@@ -684,8 +719,12 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                 )
                 try:
                     match_documents.append(
-                        _get_json(f"https://api.soccerdataapi.com/matches/?{matches_query}", soccer_headers)
+                        _get_soccerdata_json(
+                            f"https://api.soccerdataapi.com/matches/?{matches_query}", soccer_headers
+                        )
                     )
+                except ValueError:
+                    raise
                 except Exception:
                     continue
             if not _merge_soccerdata_match_documents(match_documents)[0]["matches"]:
@@ -696,8 +735,12 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
                     )
                     try:
                         match_documents.append(
-                            _get_json(f"https://api.soccerdataapi.com/matches/?{date_query}", soccer_headers)
+                            _get_soccerdata_json(
+                                f"https://api.soccerdataapi.com/matches/?{date_query}", soccer_headers
+                            )
                         )
+                    except ValueError:
+                        raise
                     except Exception:
                         continue
             soccerdata_matches = _merge_soccerdata_match_documents(match_documents)
