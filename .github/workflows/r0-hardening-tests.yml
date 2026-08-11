@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   r0-hardening:
     runs-on: ubuntu-latest
@@ -14,9 +17,11 @@ jobs:
       R0_SYNTHETIC_PAYLOAD_SHA256: 6a1454f8262462bcdbcf98a26b1e3153849f46f784eff2d84c378f8ce6193e8c
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
       - name: Install existing dependencies
