@@ -27,7 +27,9 @@ jobs:
       PIP_VALIDATION_FIXTURE_CODE: ${{ secrets.PIP_VALIDATION_FIXTURE_CODE }}
     steps:
       - name: Checkout canonical FEA source
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Fetch authenticated fixture into ephemeral runner storage
         shell: bash
