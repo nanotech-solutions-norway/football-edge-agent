@@ -35,7 +35,6 @@ class Settings(BaseSettings):
     odds_api_base_url: str = "https://api.the-odds-api.com"
     odds_api_key: str = "replace_with_api_key"
     sportsdata_io_base_url: str = "https://api.sportsdata.io/v4/soccer"
-    sportsdata_io_enabled: bool = False
     sportsdata_io_key: str = "replace_with_api_key"
     soccerdata_api_base_url: str = "https://api.soccerdataapi.com"
     soccerdata_api_key: str = "replace_with_api_key"
