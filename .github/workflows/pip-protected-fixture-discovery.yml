@@ -31,7 +31,7 @@ jobs:
       PIP_VALIDATION_FIXTURE_CODE: ${{ secrets.PIP_VALIDATION_FIXTURE_CODE }}
     steps:
       - name: Checkout canonical FEA source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Discover earliest matched Eliteserien fixture
         run: python scripts/discover_pip_fixture_registration.py --output "${RUNNER_TEMP}/pip-fixture-registration.sql"
