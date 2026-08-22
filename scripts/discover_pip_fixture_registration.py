@@ -655,13 +655,7 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
     odds_key = os.environ.get("ODDS_API_KEY", "")
     soccerdata_key = os.environ.get("SOCCERDATA_API_KEY", "")
     sports_game_odds_key = os.environ.get("SPORTS_GAME_ODDS_KEY", "")
-    sportsdata_io_enabled = os.environ.get("SPORTSDATA_IO_ENABLED", "false").strip().casefold() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-    sportsdata_io_key = os.environ.get("SPORTSDATA_IO_KEY", "") if sportsdata_io_enabled else ""
+    sportsdata_io_key = os.environ.get("SPORTSDATA_IO_KEY", "")
     api_sports_enabled = os.environ.get("API_SPORTS_ENABLED", "false").strip().casefold() in {
         "1",
         "true",
@@ -793,8 +787,6 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
         except Exception as error:
             provider_failures["sportsdata_io"] = _provider_failure_code(error)
             sportsdata_io_document = None
-    elif not sportsdata_io_enabled:
-        provider_failures["sportsdata_io"] = "disabled_policy"
 
     api_sports_document = None
     if api_sports_key:

@@ -649,7 +649,6 @@ def test_discovery_reports_sanitized_fallback_provider_failures(monkeypatch, tmp
     monkeypatch.setenv("SOCCERDATA_API_KEY", "protected-soccerdata-key")
     monkeypatch.setenv("SPORTS_GAME_ODDS_KEY", "protected-sgo-key")
     monkeypatch.setenv("SPORTSDATA_IO_KEY", "protected-sportsdata-key")
-    monkeypatch.setenv("SPORTSDATA_IO_ENABLED", "true")
     monkeypatch.setenv("API_SPORTS_ENABLED", "false")
     monkeypatch.setenv("API_SPORTS_KEY", "protected-api-sports-key")
     monkeypatch.setenv("PIP_VALIDATION_FIXTURE_CODE", "JG8XWK5")
