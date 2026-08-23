@@ -51,3 +51,48 @@ jobs:
           rm -f -- "${RUNNER_TEMP}/pip-fixture-registration.sql"
           echo "ephemeral_sql_removed=true"
           echo "sql_logged=false"
+
+  apply-registration:
+    name: Apply single-provider registration to PIP database
+    needs: discover
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: pip-automatic-database-write
+    env:
+      PIP_DB_HOST: ${{ secrets.PIP_DB_HOST }}
+      PIP_DB_PORT: ${{ secrets.PIP_DB_PORT }}
+      PIP_DB_NAME: ${{ secrets.PIP_DB_NAME }}
+      PIP_DB_USER: ${{ secrets.PIP_DB_USER }}
+      PIP_DB_PASSWORD: ${{ secrets.PIP_DB_PASSWORD }}
+    steps:
+      - name: Checkout canonical FEA source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned database connector
+        run: python -m pip install --disable-pip-version-check mysql-connector-python==9.7.0
+
+      - name: Download protected registration SQL
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: pip-fixture-registration-sql
+          path: ${{ runner.temp }}/pip-registration
+
+      - name: Apply and verify registration transaction
+        run: python scripts/apply_pip_fixture_registration.py "${RUNNER_TEMP}/pip-registration/pip-fixture-registration.sql"
+
+      - name: Remove ephemeral database artifact
+        if: always()
+        shell: bash
+        run: |
+          rm -f -- "${RUNNER_TEMP}/pip-registration/pip-fixture-registration.sql"
+          rmdir -- "${RUNNER_TEMP}/pip-registration" 2>/dev/null || true
+          echo "ephemeral_sql_removed=true"
+          echo "database_values_logged=false"
