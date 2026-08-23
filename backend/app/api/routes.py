@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, status
 
+from backend.app.api.phase3 import router as phase3_router
 from backend.app.config import get_settings
 from backend.app.providers.clients import get_provider_clients
 from backend.app.services.auto_betting_service import AutoBettingInactiveError, assert_auto_betting_allowed, get_auto_betting_status
@@ -119,3 +120,6 @@ async def execute_auto_bet():
     except AutoBettingInactiveError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     return {"status": "blocked", "data": {"message": "Auto-betting execution is not implemented in Phase 2."}}
+
+
+router.include_router(phase3_router)
