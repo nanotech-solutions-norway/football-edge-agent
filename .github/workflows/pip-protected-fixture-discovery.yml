@@ -22,12 +22,10 @@ jobs:
       name: pip-authenticated-readonly-validation
     env:
       ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
-      SOCCERDATA_API_KEY: ${{ secrets.SOCCERDATA_API_KEY }}
+      PIP_SINGLE_PROVIDER_MODE: true
       SPORTS_GAME_ODDS_ENABLED: false
       SPORTSDATA_IO_ENABLED: false
-      SPORTSDATA_IO_KEY: ${{ secrets.SPORTSDATA_IO_KEY }}
       API_SPORTS_ENABLED: false
-      API_SPORTS_KEY: ${{ secrets.API_SPORTS_KEY }}
       PIP_VALIDATION_FIXTURE_CODE: ${{ secrets.PIP_VALIDATION_FIXTURE_CODE }}
     steps:
       - name: Checkout canonical FEA source

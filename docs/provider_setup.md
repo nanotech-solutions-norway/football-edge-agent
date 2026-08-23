@@ -31,6 +31,8 @@ This document defines the Phase 2 provider setup plan for fixtures, results, cur
 
 Every entry is candidate-only. Configuration or fixture-ID extraction support does not establish an active subscription, legal entitlement, competition coverage, live ingestion, or suitability for the comparable-consensus gate.
 
+Temporary PIP fixture registration may use Odds API alone when the protected workflow explicitly sets `PIP_SINGLE_PROVIDER_MODE=true`. This exception supports registration and market-only observation only; it does not establish consensus or authorize probabilities, recommendations, betting, or execution.
+
 ## Approved MVP Competitions
 
 - EPL
