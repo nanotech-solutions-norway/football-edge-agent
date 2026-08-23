@@ -9,7 +9,8 @@ def test_protected_discovery_workflow_is_sanitized_and_ephemeral():
     assert "pip-authenticated-readonly-validation" in workflow
     assert "secrets.ODDS_API_KEY" in workflow
     assert "secrets.SOCCERDATA_API_KEY" in workflow
-    assert "secrets.SPORTS_GAME_ODDS_KEY" in workflow
+    assert "SPORTS_GAME_ODDS_ENABLED: false" in workflow
+    assert "secrets.SPORTS_GAME_ODDS_KEY" not in workflow
     assert "secrets.PIP_VALIDATION_FIXTURE_CODE" in workflow
     assert "retention-days: 1" in workflow
     assert "rm -f --" in workflow

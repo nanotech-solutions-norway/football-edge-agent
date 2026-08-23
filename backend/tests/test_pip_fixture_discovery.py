@@ -579,6 +579,7 @@ def test_discovery_skips_api_sports_plan_restriction_for_next_provider(monkeypat
     monkeypatch.setenv("ODDS_API_KEY", "protected-odds-key")
     monkeypatch.setenv("API_SPORTS_ENABLED", "true")
     monkeypatch.setenv("API_SPORTS_KEY", "protected-api-sports-key")
+    monkeypatch.setenv("SPORTS_GAME_ODDS_ENABLED", "true")
     monkeypatch.setenv("SPORTS_GAME_ODDS_KEY", "protected-sgo-key")
     monkeypatch.setenv("PIP_VALIDATION_FIXTURE_CODE", "JG8XWK5")
     for name in ("SOCCERDATA_API_KEY", "SPORTSDATA_IO_KEY"):
@@ -619,6 +620,7 @@ def test_discovery_continues_to_sports_game_odds_when_soccerdata_schedule_fails(
 
     monkeypatch.setenv("ODDS_API_KEY", "protected-odds-key")
     monkeypatch.setenv("SOCCERDATA_API_KEY", "protected-soccerdata-key")
+    monkeypatch.setenv("SPORTS_GAME_ODDS_ENABLED", "true")
     monkeypatch.setenv("SPORTS_GAME_ODDS_KEY", "protected-sgo-key")
     monkeypatch.setenv("PIP_VALIDATION_FIXTURE_CODE", "JG8XWK5")
     monkeypatch.setattr(discovery_module, "_get_json", fake_get_json)
@@ -660,7 +662,7 @@ def test_discovery_reports_sanitized_fallback_provider_failures(monkeypatch, tmp
 
     assert captured.value.provider_failures == {
         "soccerdata": "quota",
-        "sports_game_odds": "auth_or_access",
+        "sports_game_odds": "disabled_policy",
         "sportsdata_io": "endpoint_not_found",
         "api_sports": "disabled_policy",
     }

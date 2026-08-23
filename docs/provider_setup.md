@@ -25,7 +25,7 @@ This document defines the Phase 2 provider setup plan for fixtures, results, cur
 | The Odds API | Current odds and historical odds candidate | Validate market coverage and historical depth |
 | SportsDataIO Soccer API | Fixtures, results, odds, lineups, injuries candidate | Validate licensed feeds, historical warehouse access, and competition coverage |
 | Soccerdata API | Fixtures, results, current odds, lineups, injuries candidate | Validate market, league, timestamp, and data-depth coverage |
-| SportsGameOdds | Fixtures/results, current odds, and lineup candidate | Validate soccer leagues, bookmakers, market mapping, and timestamps |
+| SportsGameOdds | Disabled by policy | Do not call at this point; dormant support requires an explicit future re-enable |
 | SharpAPI | Current-odds candidate | Validate major-soccer coverage, event identity, market mapping, and timestamps |
 | StatsBomb | xG candidate | Validate access, licensing, and competition coverage |
 
@@ -58,11 +58,14 @@ ODDS_API_KEY=...
 SPORTSDATA_IO_KEY=...
 SOCCERDATA_API_KEY=...
 SPORTS_GAME_ODDS_KEY=...
+SPORTS_GAME_ODDS_ENABLED=false
 SHARPAPI_KEY=...
 STATSBOMB_KEY=...
 ```
 
 Do not commit `.env` to GitHub.
+
+`SPORTS_GAME_ODDS_ENABLED` must remain `false` until an explicit provider-policy change approves renewed use.
 
 Use server-side secret storage only. API Sports' soccer product is represented by the existing `API_FOOTBALL_*` settings; do not create a second duplicate API Sports credential.
 

@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     soccerdata_api_base_url: str = "https://api.soccerdataapi.com"
     soccerdata_api_key: str = "replace_with_api_key"
     sports_game_odds_base_url: str = "https://api.sportsgameodds.com/v2"
+    sports_game_odds_enabled: bool = False
     sports_game_odds_key: str = "replace_with_api_key"
     sharpapi_base_url: str = "https://api.sharpapi.io/api/v1"
     sharpapi_key: str = "replace_with_api_key"
