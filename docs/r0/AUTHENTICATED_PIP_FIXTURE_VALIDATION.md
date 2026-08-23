@@ -21,6 +21,12 @@ Single-provider registration is not comparable consensus. Any resulting PIP payl
 
 After the workflow is merged to `main`, the office PC can dispatch, watch, and download the protected artifact without handling provider secrets by running `scripts/Invoke-PipProtectedFixtureDiscovery.ps1`. The SQL is downloaded under the local ignored `data/pip-fixture-discovery` directory for operator review and manual phpMyAdmin import.
 
+## Automatic database write
+
+After discovery, the workflow automatically applies the single-provider registration through the separate `pip-automatic-database-write` environment. Configure `PIP_DB_HOST`, `PIP_DB_PORT`, `PIP_DB_NAME`, `PIP_DB_USER`, and `PIP_DB_PASSWORD` only as protected environment secrets. The writer requires TLS certificate and hostname verification, validates the expected `fixture_code` schema and InnoDB transaction engines, accepts exactly one fixture insert and one provider mapping, verifies both rows inside the transaction, and rolls back on any error. SQL, database values, credentials, and identifiers are never logged.
+
+The database account must be limited to the intended PIP schema and only the `SELECT` and `INSERT` privileges required by this registration. Automatic registration does not authorize schema mutation, updates, deletion, recommendation release, betting, or execution.
+
 ## Validation behavior
 
 The workflow sends one authenticated `GET` request to the PIP fixture endpoint without following redirects. The response body is bounded to 1 MB, stored with restricted permissions only in the GitHub-hosted runner temporary directory, validated through FEA's v2 shadow contract gate, and deleted in an unconditional cleanup step.

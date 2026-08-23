@@ -39,3 +39,17 @@ def test_runner_context_is_not_used_in_job_level_environment():
         job_preamble = workflow.split("    steps:", maxsplit=1)[0]
         assert "${{ runner.temp }}" not in job_preamble
         assert "RUNNER_TEMP" in workflow
+
+
+def test_automatic_database_write_is_protected_and_sanitized():
+    workflow = (ROOT / ".github/workflows/pip-protected-fixture-discovery.yml").read_text(encoding="utf-8")
+    assert "name: pip-automatic-database-write" in workflow
+    assert "secrets.PIP_DB_HOST" in workflow
+    assert "secrets.PIP_DB_NAME" in workflow
+    assert "secrets.PIP_DB_USER" in workflow
+    assert "secrets.PIP_DB_PASSWORD" in workflow
+    assert "scripts/apply_pip_fixture_registration.py" in workflow
+    assert "mysql-connector-python==9.7.0" in workflow
+    assert "persist-credentials: false" in workflow
+    assert "database_values_logged=false" in workflow
+    assert "MYSQL_PWD" not in workflow
