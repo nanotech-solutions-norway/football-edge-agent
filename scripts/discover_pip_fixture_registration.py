@@ -526,6 +526,7 @@ def build_registration_sql_from_documents(
     sports_game_odds_document: Any | None = None,
     sportsdata_io_document: Any | None = None,
     api_sports_document: Any | None = None,
+    allow_single_provider: bool = False,
 ) -> str:
     if FIXTURE_CODE_PATTERN.fullmatch(fixture_code) is None:
         raise ValueError("protected fixture code is invalid")
@@ -589,7 +590,7 @@ def build_registration_sql_from_documents(
         if len(api_sports_matches) == 1:
             resolution_metrics["api_sports_matches"] += 1
             provider_mappings.append(("api-sports", api_sports_matches[0]))
-        if not provider_mappings:
+        if not provider_mappings and not allow_single_provider:
             continue
         matched_fixture = (candidate, provider_mappings)
         break
@@ -604,7 +605,11 @@ def build_registration_sql_from_documents(
     event_key = canonical_event_key(competition, kickoff, home, away)
     kickoff_sql = kickoff.strftime("%Y-%m-%d %H:%M:%S.%f")
     lines = [
-        "-- Protected automatic discovery from at least two authenticated providers.",
+        (
+            "-- Protected automatic discovery in temporary single-provider mode."
+            if allow_single_provider
+            else "-- Protected automatic discovery from at least two authenticated providers."
+        ),
         "START TRANSACTION;",
         "INSERT INTO pip_fixtures (",
         "    fixture_code, canonical_event_key, competition_key, kickoff_at,",
@@ -651,33 +656,24 @@ def _get_json(url: str, headers: dict[str, str] | None = None) -> Any:
         return json.loads(body.decode("utf-8"))
 
 
+def _env_enabled(name: str, default: str = "false") -> bool:
+    return os.environ.get(name, default).strip().casefold() in {"1", "true", "yes", "on"}
+
+
 def discover(output: Path, *, now: datetime | None = None) -> None:
     odds_key = os.environ.get("ODDS_API_KEY", "")
-    soccerdata_key = os.environ.get("SOCCERDATA_API_KEY", "")
-    sports_game_odds_enabled = os.environ.get("SPORTS_GAME_ODDS_ENABLED", "false").strip().casefold() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    single_provider_mode = _env_enabled("PIP_SINGLE_PROVIDER_MODE")
+    soccerdata_key = "" if single_provider_mode else os.environ.get("SOCCERDATA_API_KEY", "")
+    sports_game_odds_enabled = not single_provider_mode and _env_enabled("SPORTS_GAME_ODDS_ENABLED")
     sports_game_odds_key = os.environ.get("SPORTS_GAME_ODDS_KEY", "") if sports_game_odds_enabled else ""
-    sportsdata_io_enabled = os.environ.get("SPORTSDATA_IO_ENABLED", "false").strip().casefold() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    sportsdata_io_enabled = not single_provider_mode and _env_enabled("SPORTSDATA_IO_ENABLED")
     sportsdata_io_key = os.environ.get("SPORTSDATA_IO_KEY", "") if sportsdata_io_enabled else ""
-    api_sports_enabled = os.environ.get("API_SPORTS_ENABLED", "false").strip().casefold() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    api_sports_enabled = not single_provider_mode and _env_enabled("API_SPORTS_ENABLED")
     api_sports_key = os.environ.get("API_SPORTS_KEY", "") if api_sports_enabled else ""
     fixture_code = os.environ.get("PIP_VALIDATION_FIXTURE_CODE", "")
-    if not odds_key or not fixture_code or not (
-        soccerdata_key or sports_game_odds_key or sportsdata_io_key or api_sports_key
+    if not odds_key or not fixture_code or (
+        not single_provider_mode
+        and not (soccerdata_key or sports_game_odds_key or sportsdata_io_key or api_sports_key)
     ):
         raise ValueError("required protected discovery secret is missing")
     reference_time = now or datetime.now(timezone.utc)
@@ -913,6 +909,7 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
             sports_game_odds_document=sports_game_odds_document,
             sportsdata_io_document=sportsdata_io_document,
             api_sports_document=api_sports_document,
+            allow_single_provider=single_provider_mode,
         )
     except FixtureResolutionError as error:
         error.provider_failures = provider_failures
@@ -962,7 +959,12 @@ def main() -> int:
                 )
         print("credentials_logged=false payload_logged=false provider_ids_logged=false")
         return 2
-    print("discovery_status=pass required_providers_matched=2 optional_provider_match_evaluated=true")
+    single_provider_mode = _env_enabled("PIP_SINGLE_PROVIDER_MODE")
+    required_providers = 1 if single_provider_mode else 2
+    print(
+        f"discovery_status=pass required_providers_matched={required_providers} "
+        f"single_provider_mode={str(single_provider_mode).lower()}"
+    )
     print("credentials_logged=false payload_logged=false provider_ids_logged=false")
     print("fixture_code_logged=false sql_logged=false")
     return 0

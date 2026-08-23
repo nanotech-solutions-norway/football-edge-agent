@@ -72,6 +72,55 @@ def test_discovery_fails_closed_without_cross_provider_match():
         build_registration_sql_from_documents(odds, leagues, matches, fixture_code="JG8XWK5", now=NOW)
 
 
+def test_single_provider_mode_selects_earliest_odds_fixture_only():
+    odds, _, _ = documents()
+
+    sql = build_registration_sql_from_documents(
+        odds,
+        None,
+        None,
+        fixture_code="JG8XWK5",
+        now=NOW,
+        allow_single_provider=True,
+    )
+
+    assert "temporary single-provider mode" in sql
+    assert "'odds-api', 'odds-earliest'" in sql
+    assert "'soccerdata-api'" not in sql
+    assert "'sports-game-odds'" not in sql
+
+
+def test_discovery_single_provider_mode_calls_only_odds_api(monkeypatch, tmp_path):
+    odds, _, _ = documents()
+    calls: list[str] = []
+
+    def fake_get_json(url, headers=None):
+        calls.append(url)
+        if "api.the-odds-api.com" in url:
+            return odds
+        raise AssertionError("single-provider mode called a secondary provider")
+
+    monkeypatch.setenv("ODDS_API_KEY", "protected-odds-key")
+    monkeypatch.setenv("PIP_VALIDATION_FIXTURE_CODE", "JG8XWK5")
+    monkeypatch.setenv("PIP_SINGLE_PROVIDER_MODE", "true")
+    monkeypatch.setenv("SOCCERDATA_API_KEY", "must-not-be-used")
+    monkeypatch.setenv("SPORTS_GAME_ODDS_ENABLED", "true")
+    monkeypatch.setenv("SPORTS_GAME_ODDS_KEY", "must-not-be-used")
+    monkeypatch.setenv("SPORTSDATA_IO_ENABLED", "true")
+    monkeypatch.setenv("SPORTSDATA_IO_KEY", "must-not-be-used")
+    monkeypatch.setenv("API_SPORTS_ENABLED", "true")
+    monkeypatch.setenv("API_SPORTS_KEY", "must-not-be-used")
+    monkeypatch.setattr(discovery_module, "_get_json", fake_get_json)
+    output = tmp_path / "registration.sql"
+
+    discovery_module.discover(output, now=NOW)
+
+    assert len(calls) == 1
+    rendered = output.read_text(encoding="utf-8")
+    assert "'odds-api', 'odds-earliest'" in rendered
+    assert "'soccerdata-api'" not in rendered
+
+
 def test_skips_earlier_odds_only_event_and_selects_first_cross_provider_match():
     odds, leagues, matches = documents()
     matches[0]["matches"] = [
