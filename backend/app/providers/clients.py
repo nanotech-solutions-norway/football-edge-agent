@@ -64,8 +64,11 @@ def get_provider_clients() -> dict[str, ProviderClient]:
         ),
         "sports_game_odds": ProviderClient(
             "sports_game_odds",
-            settings.sports_game_odds_key != "replace_with_api_key",
-            ProviderCapability("sports_game_odds", True, True, True, False, False, True, False, True, "candidate"),
+            settings.sports_game_odds_enabled and settings.sports_game_odds_key != "replace_with_api_key",
+            ProviderCapability(
+                "sports_game_odds", True, True, True, False, False, True, False, True, "disabled_by_policy"
+            ),
+            enabled=settings.sports_game_odds_enabled,
         ),
         "sharpapi": ProviderClient(
             "sharpapi",

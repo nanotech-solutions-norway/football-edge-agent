@@ -654,7 +654,13 @@ def _get_json(url: str, headers: dict[str, str] | None = None) -> Any:
 def discover(output: Path, *, now: datetime | None = None) -> None:
     odds_key = os.environ.get("ODDS_API_KEY", "")
     soccerdata_key = os.environ.get("SOCCERDATA_API_KEY", "")
-    sports_game_odds_key = os.environ.get("SPORTS_GAME_ODDS_KEY", "")
+    sports_game_odds_enabled = os.environ.get("SPORTS_GAME_ODDS_ENABLED", "false").strip().casefold() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    sports_game_odds_key = os.environ.get("SPORTS_GAME_ODDS_KEY", "") if sports_game_odds_enabled else ""
     sportsdata_io_enabled = os.environ.get("SPORTSDATA_IO_ENABLED", "false").strip().casefold() in {
         "1",
         "true",
@@ -676,6 +682,8 @@ def discover(output: Path, *, now: datetime | None = None) -> None:
         raise ValueError("required protected discovery secret is missing")
     reference_time = now or datetime.now(timezone.utc)
     provider_failures: dict[str, str] = {}
+    if not sports_game_odds_enabled:
+        provider_failures["sports_game_odds"] = "disabled_policy"
 
     odds_query = urllib.parse.urlencode(
         {"apiKey": odds_key, "regions": "eu", "markets": "h2h", "oddsFormat": "decimal", "dateFormat": "iso"}
