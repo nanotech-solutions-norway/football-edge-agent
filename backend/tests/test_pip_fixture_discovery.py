@@ -96,7 +96,7 @@ def test_discovery_single_provider_mode_calls_only_odds_api(monkeypatch, tmp_pat
 
     def fake_get_json(url, headers=None):
         calls.append(url)
-        if "api.the-odds-api.com" in url:
+        if urlparse(url).hostname == "api.the-odds-api.com":
             return odds
         raise AssertionError("single-provider mode called a secondary provider")
 
