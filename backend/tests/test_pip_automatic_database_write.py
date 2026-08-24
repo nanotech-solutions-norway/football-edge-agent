@@ -1,4 +1,9 @@
-from scripts.apply_pip_fixture_registration import RegistrationWriteError, apply_registration, validated_write_statements
+from scripts.apply_pip_fixture_registration import (
+    RegistrationWriteError,
+    _connector_error_code,
+    apply_registration,
+    validated_write_statements,
+)
 
 
 SQL = """-- Protected automatic discovery in temporary single-provider mode.
@@ -115,3 +120,15 @@ def test_applies_and_verifies_inside_one_tls_verified_transaction(monkeypatch, t
     assert connector.config["ssl_verify_cert"] is True
     assert connector.config["ssl_verify_identity"] is True
     assert connector.config["ssl_disabled"] is False
+
+
+def test_connector_failures_are_categorized_without_exception_text():
+    class ConnectorError(Exception):
+        def __init__(self, errno, message):
+            super().__init__(message)
+            self.errno = errno
+
+    assert _connector_error_code(ConnectorError(2005, "secret-host")) == "database_host_unresolved"
+    assert _connector_error_code(ConnectorError(1045, "secret-user")) == "database_authentication_failed"
+    assert _connector_error_code(ConnectorError(2026, "secret-host")) == "database_tls_failed"
+    assert _connector_error_code(ConnectorError(None, "secret-value")) == "database_write_failed"

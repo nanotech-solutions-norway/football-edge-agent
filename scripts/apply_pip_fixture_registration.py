@@ -13,6 +13,27 @@ class RegistrationWriteError(RuntimeError):
     """Stable fail-closed write error with no provider or database values."""
 
 
+def _connector_error_code(error: Exception) -> str:
+    """Reduce connector failures to stable codes without exposing exception text."""
+    errno = getattr(error, "errno", None)
+    categories = {
+        1044: "database_authorization_failed",
+        1045: "database_authentication_failed",
+        1049: "database_name_invalid",
+        1054: "database_schema_incompatible",
+        1062: "database_conflict",
+        1146: "database_schema_incompatible",
+        2003: "database_network_unreachable",
+        2005: "database_host_unresolved",
+        2006: "database_connection_lost",
+        2013: "database_connection_lost",
+        2026: "database_tls_failed",
+        2055: "database_connection_lost",
+        3159: "database_tls_failed",
+    }
+    return categories.get(errno, "database_write_failed")
+
+
 def _split_sql(document: str) -> list[str]:
     statements: list[str] = []
     current: list[str] = []
@@ -147,7 +168,7 @@ def apply_registration(document: str, connector: Any, environment: dict[str, str
     except Exception as error:
         if connection is not None:
             connection.rollback()
-        raise RegistrationWriteError("database_write_failed") from error
+        raise RegistrationWriteError(_connector_error_code(error)) from error
     finally:
         if cursor is not None:
             cursor.close()
